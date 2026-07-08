@@ -17,6 +17,6 @@ add_executable(test_smoke test_smoke.c)
 target_link_libraries(test_smoke unity)
 add_test(NAME test_smoke COMMAND test_smoke)
 
-add_executable(test_ds2_protocol test_ds2_protocol.c)
+add_executable(test_ds2_protocol test_ds2_protocol.c ../src/ps2_device/ds2_protocol.c)
 target_link_libraries(test_ds2_protocol unity)
 add_test(NAME test_ds2_protocol COMMAND test_ds2_protocol)
