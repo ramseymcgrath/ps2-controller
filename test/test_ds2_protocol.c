@@ -92,6 +92,20 @@ static void test_analog_poll_reflects_input(void) {
     TEST_ASSERT_EQUAL_HEX8(0x00, out[6]);          // lx
 }
 
+static void test_enter_config_sets_flag(void) {
+    ds2_state_t st; ds2_init(&st); st.mode = MODE_ANALOG;
+    const uint8_t req[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x00};  // enter
+    ds2_apply_request(&st, CMD_CONFIG, req, sizeof req);
+    TEST_ASSERT_TRUE(st.config);
+}
+
+static void test_exit_config_clears_flag(void) {
+    ds2_state_t st; ds2_init(&st); st.config = true;
+    const uint8_t req[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // exit
+    ds2_apply_request(&st, CMD_CONFIG, req, sizeof req);
+    TEST_ASSERT_FALSE(st.config);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neutral_state_defaults);
@@ -101,5 +115,7 @@ int main(void) {
     RUN_TEST(test_digital_poll_respects_cap);
     RUN_TEST(test_config_mode_id_is_F3);
     RUN_TEST(test_analog_poll_reflects_input);
+    RUN_TEST(test_enter_config_sets_flag);
+    RUN_TEST(test_exit_config_clears_flag);
     return UNITY_END();
 }

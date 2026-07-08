@@ -39,6 +39,10 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
             }
             break;
         }
+        case CMD_CONFIG: {
+            for (int i = 0; i < 6 && n < cap; i++) out[n++] = 0x00;
+            break;
+        }
         default:
             break;
     }
@@ -47,6 +51,14 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
 
 void ds2_apply_request(ds2_state_t *st, uint8_t cmd,
                        const uint8_t *req, size_t req_len) {
-    (void)req; (void)req_len;
-    if (cmd == CMD_POLL) st->config = false;
+    switch (cmd) {
+        case CMD_POLL:
+            st->config = false;
+            break;
+        case CMD_CONFIG:
+            if (req_len > 1) st->config = (req[1] == 0x01);
+            break;
+        default:
+            break;
+    }
 }
