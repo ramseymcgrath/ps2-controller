@@ -1,0 +1,31 @@
+name: host-tests
+
+# Runs the host-testable core (pure-C DS2 protocol + gamepad mapping) unit tests.
+# The firmware itself targets the RP2350 / Pico SDK and is built separately; this
+# workflow only exercises the hardware-independent logic that compiles natively.
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain versions
+        run: |
+          cc --version
+          cmake --version
+
+      - name: Configure (host test build)
+        run: cmake -S test -B build-test
+
+      - name: Build tests
+        run: cmake --build build-test
+
+      - name: Run tests
+        run: ctest --test-dir build-test --output-on-failure
