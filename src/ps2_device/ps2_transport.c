@@ -24,6 +24,20 @@ void ps2_send(uint8_t byte) {
     write_byte_blocking(pio0, sm_dat_writer, byte);
 }
 
+bool ps2_try_recv_cmd(uint8_t *out) {
+    if (pio_sm_is_rx_fifo_empty(pio0, sm_cmd_reader))
+        return false;
+    *out = read_byte_blocking(pio0, sm_cmd_reader);  // non-empty: will not block
+    return true;
+}
+
+bool ps2_try_send(uint8_t byte) {
+    if (pio_sm_is_tx_fifo_full(pio0, sm_dat_writer))
+        return false;
+    write_byte_blocking(pio0, sm_dat_writer, byte);  // not full: will not block
+    return true;
+}
+
 void __time_critical_func(ps2_restart_pio)(void) {
     const uint32_t mask = (1u << sm_cmd_reader) | (1u << sm_dat_writer);
     pio_set_sm_mask_enabled(pio0, mask, false);

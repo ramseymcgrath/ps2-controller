@@ -21,13 +21,21 @@ void    ps2_transport_init(void);
 uint8_t ps2_recv_cmd(void);   // read one CMD byte the console shifted in
 void    ps2_send(uint8_t byte); // drive one DAT byte back to the console
 
+// Non-blocking variants: return false immediately if the RX FIFO is empty /
+// the TX FIFO is full, else perform the transfer and return true. core1 uses
+// these so it can poll for a transaction-restart signal instead of blocking
+// forever mid-transaction (see ps2_device.c).
+bool    ps2_try_recv_cmd(uint8_t *out);
+bool    ps2_try_send(uint8_t byte);
+
 // Re-sync both state machines to the start of a transaction. RAM-resident
 // (__time_critical_func) because it runs from the SEL ISR.
 void    ps2_restart_pio(void);
 
 // Optional hook the SEL-rising ISR runs immediately after ps2_restart_pio().
-// The device/lifecycle layer registers this to reset+relaunch the core1
-// protocol thread, so each transaction re-starts parsing from byte 0. NULL ok.
+// The device layer registers this to signal its core1 loop to abandon the
+// current transaction and re-sync at the address gate (a lightweight flag, not
+// a core reset — see ps2_device.c). NULL ok.
 void    ps2_transport_set_sel_hook(void (*hook)(void));
 
 // Enable/disable the SEL-rising IRQ (registered by ps2_transport_init). The

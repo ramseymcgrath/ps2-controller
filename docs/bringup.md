@@ -58,17 +58,22 @@ adjust so we don't double-send it.
 ⬜ Config handshake: send `01 43 00 01…` (enter), `01 44 01 03…` (analog+lock),
 `01 43 00 00…` (exit); confirm the ID flips to `0x73` and stays.
 
-## 5. SEL ISR ↔ core1 reset ordering (Task 14) — highest-risk item
+## 5. SEL ISR ↔ core1 transaction restart (Task 14) — highest-risk item
 
-The SEL-rising ISR runs `ps2_restart_pio()` (re-syncs the SMs, re-enables them)
-**then** the registered hook (`multicore_reset_core1()` + relaunch). The fork
-instead resets core1 *before* re-enabling the SMs.
+The SEL-rising ISR runs `ps2_restart_pio()` (re-syncs and re-enables the SMs)
+then sets a `volatile bool s_restart` (via the registered hook). core1 runs
+continuously and its wait loops (`recv_cmd`/`send_dat` in `ps2_device.c`) poll
+that flag, abandoning the current transaction and re-syncing at the address gate.
+core1 is launched **once** per connection — **not** reset/relaunched per
+transaction (that pattern busy-waits unbounded in the SDK and can hang core0).
 ⬜ Verify on the analyzer that a new transaction immediately after SEL-rise is
-parsed from byte 0 (no desync). If the first byte of the next transaction is
-occasionally mis-read, move the core1 reset to run before
-`pio_enable_sm_mask_in_sync` (fold the hook into `ps2_restart_pio`).
-⬜ Confirm relaunching core1 from the ISR every transaction keeps up at the PS2's
-poll rate without missing transactions.
+parsed from byte 0 (no desync), across many consecutive polls.
+⬜ Confirm the non-blocking poll keeps up: core1 grabs each byte promptly and the
+`s_restart` abort fires within one transaction (no stale response bytes leak into
+the next frame).
+⬜ Watch for a missed restart under back-to-back transactions (the SM restart
+provides byte alignment even if the flag is briefly clobbered, but confirm no
+cumulative drift).
 
 ## 6. Real console (Task 14) & polish (Task 15)
 

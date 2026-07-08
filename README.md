@@ -47,12 +47,16 @@ is vendored under `test/unity/`.
 
 ## Building the firmware (`pico2_w`)
 
-Requires the ARM toolchain (`arm-none-eabi-gcc`), CMake, Ninja, and Pico SDK ≥ 2.1
-with `PICO_SDK_PATH` set. BluePad32 and its bundled BTstack come in as submodules:
+Requires the ARM toolchain (`arm-none-eabi-gcc`), CMake, Ninja, and the Pico SDK
+with `PICO_SDK_PATH` set. The build is validated against **Pico SDK 2.3.0** (CI
+pins this tag); other ≥ 2.1 versions likely work but are unverified. BluePad32
+and its bundled BTstack come in as submodules:
 
 ```sh
 git submodule update --init --recursive
-export PICO_SDK_PATH=/path/to/pico-sdk
+git clone --branch 2.3.0 https://github.com/raspberrypi/pico-sdk.git
+git -C pico-sdk submodule update --init
+export PICO_SDK_PATH=$PWD/pico-sdk
 cmake -S . -B build -G Ninja -DPICO_BOARD=pico2_w
 cmake --build build
 # -> build/ps2_controller.uf2

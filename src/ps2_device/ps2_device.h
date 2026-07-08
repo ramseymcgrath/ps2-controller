@@ -5,9 +5,11 @@
 // controller-port protocol forever: gate on the 0x01 address, send the ID byte,
 // stream the ds2_response() frame while capturing the console's request bytes,
 // then apply them. Reads controller state via shared_input_snapshot(); drives
-// the bus via ps2_transport. The SEL-rising ISR resets this thread at each
-// transaction boundary. Never returns. Protocol state is NOT initialised here
-// (it must survive per-transaction relaunches) — ps2_device_start() does that.
+// the bus via ps2_transport. Its wait loops poll a restart flag the SEL-rising
+// ISR sets, so it abandons an interrupted transaction and re-syncs at the
+// address gate without a core reset. Launched once per connection (never
+// per-transaction). Protocol state is initialised by ps2_device_start(), not
+// here, so it persists across transactions.
 void ps2_device_thread(void);
 
 // Bring the PS2 device online (call on controller connect, from core0):

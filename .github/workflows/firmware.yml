@@ -29,8 +29,13 @@ jobs:
           arm-none-eabi-gcc --version | head -1
 
       - name: Clone Pico SDK
+        env:
+          # Pinned: the PICO_BTSTACK_PATH override + build were validated against
+          # this exact SDK tag. Bump deliberately (with a green run) when upgrading.
+          PICO_SDK_TAG: "2.3.0"
         run: |
-          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git "$HOME/pico-sdk"
+          git clone --branch "$PICO_SDK_TAG" --depth 1 \
+            https://github.com/raspberrypi/pico-sdk.git "$HOME/pico-sdk"
           git -C "$HOME/pico-sdk" submodule update --init --depth 1 \
             lib/tinyusb lib/cyw43-driver lib/btstack lib/lwip lib/mbedtls
 
