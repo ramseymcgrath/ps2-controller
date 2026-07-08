@@ -21,21 +21,21 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
     (void)req; (void)req_len;
     size_t n = 0;
     if (cap < 2) return 0;
-    out[n++] = id_byte(st);
-    out[n++] = 0x5A;
+    if (n < cap) out[n++] = id_byte(st);
+    if (n < cap) out[n++] = 0x5A;
 
     switch (cmd) {
         case CMD_POLL: {
             if (st->mode == MODE_DIGITAL) {
-                out[n++] = in->buttons1;
-                out[n++] = in->buttons2;
+                if (n < cap) out[n++] = in->buttons1;
+                if (n < cap) out[n++] = in->buttons2;
             } else { // ANALOG (pressure handled in a later task)
-                out[n++] = in->buttons1;
-                out[n++] = in->buttons2;
-                out[n++] = in->rx;
-                out[n++] = in->ry;
-                out[n++] = in->lx;
-                out[n++] = in->ly;
+                if (n < cap) out[n++] = in->buttons1;
+                if (n < cap) out[n++] = in->buttons2;
+                if (n < cap) out[n++] = in->rx;
+                if (n < cap) out[n++] = in->ry;
+                if (n < cap) out[n++] = in->lx;
+                if (n < cap) out[n++] = in->ly;
             }
             break;
         }
