@@ -27,3 +27,7 @@ pico-sdk/
 
 # Remember plugin session data
 .remember/
+
+# Subagent-driven-development scratch
+.superpowers/
+build-test/
