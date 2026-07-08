@@ -17,6 +17,12 @@ typedef struct {
 
 void ds2_init(ds2_state_t *st);
 
+// The leading response byte (0xF3 in config, else the current mode). The
+// transport sends this simultaneously with the console's command byte — i.e.
+// before ds2_response() can be called — so it is exposed separately. It equals
+// out[0] from ds2_response() for the same state.
+uint8_t ds2_id_byte(const ds2_state_t *st);
+
 // Build the full DATA response frame for `cmd` given current state + input.
 // out[0]=ID (0xF3 in config, else mode), out[1]=0x5A, then payload.
 // `req` = the console's payload bytes after the command byte (for offset-

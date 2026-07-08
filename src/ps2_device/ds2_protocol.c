@@ -10,7 +10,7 @@ void ds2_init(ds2_state_t *st) {
     memset(st->motor_bytes, 0xFF, sizeof st->motor_bytes);
 }
 
-static uint8_t id_byte(const ds2_state_t *st) {
+uint8_t ds2_id_byte(const ds2_state_t *st) {
     return st->config ? MODE_CONFIG : st->mode;
 }
 
@@ -27,7 +27,7 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
                     uint8_t *out, size_t cap) {
     size_t n = 0;
     if (cap < 2) return 0;
-    if (n < cap) out[n++] = id_byte(st);
+    if (n < cap) out[n++] = ds2_id_byte(st);
     if (n < cap) out[n++] = 0x5A;
 
     switch (cmd) {
