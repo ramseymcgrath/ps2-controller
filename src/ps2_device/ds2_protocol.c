@@ -15,9 +15,10 @@ static uint8_t id_byte(const ds2_state_t *st) {
 }
 
 static uint8_t detect_analog(const ds2_state_t *st) {
-    int sum = st->poll_config[0] + st->poll_config[1]
-            + st->poll_config[2] + st->poll_config[3];
-    return (sum > 0) ? MODE_ANALOG_PRESSURE : MODE_ANALOG;
+    (void)st;
+    // MVP: pressure (0x79) deferred to M5; always present as analog (0x73).
+    // See docs/superpowers/plans/2026-07-07-0x79-pressure-mode-decision.md
+    return MODE_ANALOG;
 }
 
 size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
@@ -133,9 +134,7 @@ void ds2_apply_request(ds2_state_t *st, uint8_t cmd,
         case CMD_POLL_CONFIG:
             if (st->config && req_len > 4) {
                 for (int i = 0; i < 4; i++) st->poll_config[i] = req[1 + i];
-                int sum = st->poll_config[0] + st->poll_config[1]
-                        + st->poll_config[2] + st->poll_config[3];
-                st->mode = (sum != 0) ? MODE_ANALOG_PRESSURE : MODE_ANALOG;
+                st->mode = detect_analog(st);
             }
             break;
         case CMD_ENABLE_RUMBLE:

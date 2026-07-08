@@ -132,12 +132,31 @@ static void test_status_45_in_analog_config(void) {
     TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, out, n);
 }
 
-static void test_pollconfig_4F_enables_pressure_mode(void) {
+static void test_pollconfig_4F_stays_analog_mvp(void) {
     ds2_state_t st; ds2_init(&st); st.config = true; st.mode = MODE_ANALOG;
-    // req[1..4] = the 4 config bytes; nonzero sum => pressure mode
+    // req[1..4] = the 4 config bytes; nonzero sum previously flipped the pad
+    // to MODE_ANALOG_PRESSURE. ds2_response has no 0x79 branch (MVP scope),
+    // so mode must stay MODE_ANALOG regardless of what the console requests.
     const uint8_t req[] = {0x00, 0xFF, 0xFF, 0x03, 0x00, 0x00};
     ds2_apply_request(&st, CMD_POLL_CONFIG, req, sizeof req);
-    TEST_ASSERT_EQUAL_HEX8(MODE_ANALOG_PRESSURE, st.mode);
+    TEST_ASSERT_EQUAL_HEX8(MODE_ANALOG, st.mode);
+}
+
+static void test_full_analog_handshake(void) {
+    ds2_state_t st; ds2_init(&st);
+    uint8_t enter[] = {0x00, 0x01};        // 0x43 enter config
+    ds2_apply_request(&st, CMD_CONFIG, enter, sizeof enter);
+    uint8_t analog[] = {0x00, 0x01, 0x03}; // 0x44 analog + lock
+    ds2_apply_request(&st, CMD_ANALOG_SWITCH, analog, sizeof analog);
+    uint8_t exit[] = {0x00, 0x00};         // 0x43 exit config
+    ds2_apply_request(&st, CMD_CONFIG, exit, sizeof exit);
+    TEST_ASSERT_TRUE(st.analog_lock);
+    PSXInputState in = ds2_neutral_state();
+    uint8_t out[32];
+    size_t n = ds2_response(&st, CMD_POLL, &in, NULL, 0, out, sizeof out);
+    const uint8_t expect[] = {0x73, 0x5A, 0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80};
+    TEST_ASSERT_EQUAL_UINT(sizeof expect, n);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, out, n);
 }
 
 int main(void) {
@@ -154,6 +173,7 @@ int main(void) {
     RUN_TEST(test_analog_switch_sets_analog_and_lock);
     RUN_TEST(test_analog_switch_ignored_outside_config);
     RUN_TEST(test_status_45_in_analog_config);
-    RUN_TEST(test_pollconfig_4F_enables_pressure_mode);
+    RUN_TEST(test_pollconfig_4F_stays_analog_mvp);
+    RUN_TEST(test_full_analog_handshake);
     return UNITY_END();
 }
