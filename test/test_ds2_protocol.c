@@ -121,6 +121,25 @@ static void test_analog_switch_ignored_outside_config(void) {
     TEST_ASSERT_EQUAL_HEX8(MODE_DIGITAL, st.mode);     // unchanged
 }
 
+static void test_status_45_in_analog_config(void) {
+    ds2_state_t st; ds2_init(&st); st.mode = MODE_ANALOG; st.config = true;
+    PSXInputState in = ds2_neutral_state();
+    uint8_t out[32];
+    size_t n = ds2_response(&st, CMD_STATUS, &in, NULL, 0, out, sizeof out);
+    // ID(F3) 5A 03 02 01 02 01 00  (byte[4]=0x01 => analog; 0x00 => digital)
+    const uint8_t expect[] = {0xF3, 0x5A, 0x03, 0x02, 0x01, 0x02, 0x01, 0x00};
+    TEST_ASSERT_EQUAL_UINT(sizeof expect, n);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expect, out, n);
+}
+
+static void test_pollconfig_4F_enables_pressure_mode(void) {
+    ds2_state_t st; ds2_init(&st); st.config = true; st.mode = MODE_ANALOG;
+    // req[1..4] = the 4 config bytes; nonzero sum => pressure mode
+    const uint8_t req[] = {0x00, 0xFF, 0xFF, 0x03, 0x00, 0x00};
+    ds2_apply_request(&st, CMD_POLL_CONFIG, req, sizeof req);
+    TEST_ASSERT_EQUAL_HEX8(MODE_ANALOG_PRESSURE, st.mode);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neutral_state_defaults);
@@ -134,5 +153,7 @@ int main(void) {
     RUN_TEST(test_exit_config_clears_flag);
     RUN_TEST(test_analog_switch_sets_analog_and_lock);
     RUN_TEST(test_analog_switch_ignored_outside_config);
+    RUN_TEST(test_status_45_in_analog_config);
+    RUN_TEST(test_pollconfig_4F_enables_pressure_mode);
     return UNITY_END();
 }

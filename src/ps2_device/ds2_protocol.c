@@ -24,7 +24,6 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
                     const PSXInputState *in,
                     const uint8_t *req, size_t req_len,
                     uint8_t *out, size_t cap) {
-    (void)req; (void)req_len;
     size_t n = 0;
     if (cap < 2) return 0;
     if (n < cap) out[n++] = id_byte(st);
@@ -53,6 +52,63 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
             for (int i = 0; i < 5 && n < cap; i++) out[n++] = 0x00;
             break;
         }
+        case CMD_STATUS: {  // 0x45
+            if (st->config) {
+                const uint8_t tail[] = {0x03, 0x02,
+                    (uint8_t)(st->mode == MODE_DIGITAL ? 0x00 : 0x01),
+                    0x02, 0x01, 0x00};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_POLL_CONFIG_STATUS: {  // 0x41
+            if (st->config) {
+                bool dig = (st->mode == MODE_DIGITAL);
+                const uint8_t tail[] = {
+                    (uint8_t)(dig ? 0x00 : 0xFF), (uint8_t)(dig ? 0x00 : 0xFF),
+                    (uint8_t)(dig ? 0x00 : 0x03), (uint8_t)(dig ? 0x00 : 0x00),
+                    0x00, (uint8_t)(dig ? 0x00 : 0x5A)};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_PRES_CONFIG: {  // 0x40
+            if (st->config) {
+                const uint8_t tail[] = {0x00, 0x00, 0x02, 0x00, 0x00, 0x5A};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_CONST_46: {  // offset-dependent (req[1] = offset)
+            if (st->config) {
+                uint8_t off = (req && req_len > 1) ? req[1] : 0x00;
+                const uint8_t tail[] = {0x00, 0x01,
+                    (uint8_t)(off == 0x00 ? 0x02 : 0x01),
+                    (uint8_t)(off == 0x00 ? 0x00 : 0x01), 0x0F};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_CONST_47: {
+            if (st->config) {
+                const uint8_t tail[] = {0x00, 0x00, 0x02, 0x00, 0x01, 0x00};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_CONST_4C: {  // offset-dependent
+            if (st->config) {
+                uint8_t off = (req && req_len > 1) ? req[1] : 0x00;
+                const uint8_t tail[] = {0x00, 0x00,
+                    (uint8_t)(off == 0x00 ? 0x04 : 0x07), 0x00, 0x00};
+                for (size_t i = 0; i < sizeof tail && n < cap; i++) out[n++] = tail[i];
+            }
+            break;
+        }
+        case CMD_POLL_CONFIG:    // 0x4F — response is fixed 5A + 5 zeros
+        case CMD_ENABLE_RUMBLE:  // 0x4D — response is fixed 5A + 5 zeros
+            for (int i = 0; i < 5 && n < cap; i++) out[n++] = 0x00;
+            break;
         default:
             break;
     }
@@ -73,6 +129,18 @@ void ds2_apply_request(ds2_state_t *st, uint8_t cmd,
                 st->mode = (req[1] == 0x01) ? detect_analog(st) : MODE_DIGITAL;
                 st->analog_lock = (req[2] == 0x03);
             }
+            break;
+        case CMD_POLL_CONFIG:
+            if (st->config && req_len > 4) {
+                for (int i = 0; i < 4; i++) st->poll_config[i] = req[1 + i];
+                int sum = st->poll_config[0] + st->poll_config[1]
+                        + st->poll_config[2] + st->poll_config[3];
+                st->mode = (sum != 0) ? MODE_ANALOG_PRESSURE : MODE_ANALOG;
+            }
+            break;
+        case CMD_ENABLE_RUMBLE:
+            if (st->config && req_len > 6)
+                for (int i = 0; i < 6; i++) st->motor_bytes[i] = req[1 + i];
             break;
         default:
             break;
