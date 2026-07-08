@@ -16,10 +16,17 @@
 #define BP_BTN_R3     0x0200
 // misc buttons live in a separate BluePad32 field; wired up in Task 11.
 
+// BluePad32 analog input ranges and the constants derived from them.
+#define BP_AXIS_CENTER_OFFSET     512  // axis is signed -512..511; +offset shifts to 0..1023
+#define BP_ANALOG_TO_U8_DIV       4    // downscale a 0..1023 (10-bit) value to 0..255 (8-bit)
+#define TRIGGER_DIGITAL_THRESHOLD 512  // brake/throttle press point that latches the L2/R2 bit
+
 static uint8_t axis_to_u8(int32_t v) {
-    // BluePad32 axis range -512..511 -> 0..255, neutral 0x80.
-    int32_t s = (v + 512) >> 2;         // 0..255
-    if (s < 0) s = 0; if (s > 255) s = 255;
+    // BluePad32 axis range -512..511 -> 0..255, neutral 0x80. Use '/' (not '>>') so the
+    // scaling stays well-defined even if a controller reports an out-of-range value.
+    int32_t s = (v + BP_AXIS_CENTER_OFFSET) / BP_ANALOG_TO_U8_DIV;
+    if (s < 0)   s = 0;
+    if (s > 255) s = 255;
     return (uint8_t)s;
 }
 
@@ -44,8 +51,8 @@ void map_gamepad_to_psx(const gamepad_snapshot_t *g, PSXInputState *out) {
       if (g->buttons & BP_BTN_Y) b_target &= (uint8_t)~PS_TRI;
       if (g->buttons & BP_BTN_L1) b_target &= (uint8_t)~PS_L1;
       if (g->buttons & BP_BTN_R1) b_target &= (uint8_t)~PS_R1;
-      if (g->brake    > 512)      b_target &= (uint8_t)~PS_L2;  // analog->digital threshold
-      if (g->throttle > 512)      b_target &= (uint8_t)~PS_R2;
+      if (g->brake    > TRIGGER_DIGITAL_THRESHOLD) b_target &= (uint8_t)~PS_L2;
+      if (g->throttle > TRIGGER_DIGITAL_THRESHOLD) b_target &= (uint8_t)~PS_R2;
       b2 = b_target; }
 
     out->buttons1 = b1;
@@ -54,6 +61,6 @@ void map_gamepad_to_psx(const gamepad_snapshot_t *g, PSXInputState *out) {
     out->ly = axis_to_u8(g->axis_y);
     out->rx = axis_to_u8(g->axis_rx);
     out->ry = axis_to_u8(g->axis_ry);
-    out->l2 = (uint8_t)(g->brake    >> 2);
-    out->r2 = (uint8_t)(g->throttle >> 2);
+    out->l2 = (uint8_t)(g->brake    / BP_ANALOG_TO_U8_DIV);
+    out->r2 = (uint8_t)(g->throttle / BP_ANALOG_TO_U8_DIV);
 }
