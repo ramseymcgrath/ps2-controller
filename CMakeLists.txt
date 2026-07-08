@@ -25,7 +25,12 @@ add_executable(ps2_controller
     src/input/bluepad32_platform.c
     src/input/gamepad_map.c
     src/input/shared_input.c
+    src/ps2_device/ps2_transport.c
 )
+
+# Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.
+pico_generate_pio_header(ps2_controller
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2_device/psxSPI.pio)
 
 target_include_directories(ps2_controller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -47,6 +52,7 @@ target_link_libraries(ps2_controller PUBLIC
     pico_btstack_ble
     pico_btstack_cyw43
     pico_multicore
+    hardware_pio
     bluepad32
 )
 
