@@ -66,6 +66,32 @@ static void test_digital_poll_respects_cap(void) {
     TEST_ASSERT_EQUAL_HEX8_ARRAY(prefix, buf, 3);
 }
 
+static void test_config_mode_id_is_F3(void) {
+    ds2_state_t st; ds2_init(&st);
+    st.mode = MODE_ANALOG;
+    st.config = true;                       // in config/escape mode
+    PSXInputState in = ds2_neutral_state();
+    uint8_t out[32];
+    size_t n = ds2_response(&st, CMD_POLL, &in, NULL, 0, out, sizeof out);
+    TEST_ASSERT_TRUE(n >= 1);
+    TEST_ASSERT_EQUAL_HEX8(0xF3, out[0]);   // ID reflects config, not mode
+}
+
+static void test_analog_poll_reflects_input(void) {
+    ds2_state_t st; ds2_init(&st); st.mode = MODE_ANALOG;
+    PSXInputState in = ds2_neutral_state();
+    in.buttons2 &= (uint8_t)~PS_X;   // press Cross (active-low: clear the bit)
+    in.lx = 0x00;                    // left stick full left
+    in.ry = 0xFF;                    // right stick full down
+    uint8_t out[32];
+    size_t n = ds2_response(&st, CMD_POLL, &in, NULL, 0, out, sizeof out);
+    TEST_ASSERT_EQUAL_UINT(8, n);
+    TEST_ASSERT_EQUAL_HEX8(in.buttons1, out[2]);
+    TEST_ASSERT_EQUAL_HEX8(in.buttons2, out[3]);   // Cross bit cleared
+    TEST_ASSERT_EQUAL_HEX8(0xFF, out[5]);          // ry
+    TEST_ASSERT_EQUAL_HEX8(0x00, out[6]);          // lx
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neutral_state_defaults);
@@ -73,5 +99,7 @@ int main(void) {
     RUN_TEST(test_digital_poll_neutral);
     RUN_TEST(test_response_respects_cap);
     RUN_TEST(test_digital_poll_respects_cap);
+    RUN_TEST(test_config_mode_id_is_F3);
+    RUN_TEST(test_analog_poll_reflects_input);
     return UNITY_END();
 }
