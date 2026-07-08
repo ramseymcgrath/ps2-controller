@@ -1,0 +1,55 @@
+name: firmware
+
+# Cross-compiles the RP2350 firmware (pico2_w) to a .uf2. There is no hardware
+# in CI, so this is the automated gate that stands in for the plan's on-console
+# verification: a clean ARM build catches integration regressions (missing
+# symbols, BluePad32/btstack API drift, PIO header generation, linker errors).
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # external/bluepad32 + its bundled btstack
+
+      - name: Install ARM toolchain and build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi \
+            cmake ninja-build \
+            libusb-1.0-0-dev pkg-config build-essential
+          arm-none-eabi-gcc --version | head -1
+
+      - name: Clone Pico SDK
+        run: |
+          git clone --depth 1 https://github.com/raspberrypi/pico-sdk.git "$HOME/pico-sdk"
+          git -C "$HOME/pico-sdk" submodule update --init --depth 1 \
+            lib/tinyusb lib/cyw43-driver lib/btstack lib/lwip lib/mbedtls
+
+      - name: Configure and build (pico2_w)
+        env:
+          PICO_SDK_PATH: /home/runner/pico-sdk
+        run: |
+          # PICOTOOL_FORCE_FETCH_FROM_GIT builds a matching picotool during
+          # configure (the SDK requires an exact-version picotool for boot_stage2
+          # disassembly output; apt's may lag the SDK).
+          cmake -S . -B build -G Ninja \
+            -DPICO_BOARD=pico2_w \
+            -DPICOTOOL_FORCE_FETCH_FROM_GIT=1
+          cmake --build build
+          test -f build/ps2_controller.uf2
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps2_controller-pico2_w-uf2
+          path: build/ps2_controller.uf2
+          if-no-files-found: error
