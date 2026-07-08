@@ -12,8 +12,10 @@ static ds2_state_t s_state;
 
 void ps2_device_thread(void) {
     // Let core0 pause this core for flash ops (e.g. BT key storage).
+    // No ds2_init() here: the SEL ISR relaunches this thread at every
+    // transaction boundary, so the protocol state (config/mode) must persist
+    // across relaunches. ps2_device_start() initialises s_state once on connect.
     multicore_lockout_victim_init();
-    ds2_init(&s_state);
 
     uint8_t resp[32];
     uint8_t req[32];
@@ -50,4 +52,28 @@ void ps2_device_thread(void) {
 
         ds2_apply_request(&s_state, cmd, req, ri);
     }
+}
+
+// SEL-rising ISR hook (runs on core0): abort any mid-transaction blocked read
+// on core1 and restart the loop at the address gate for the next transaction.
+// s_state is a persistent static, so config/mode survive the relaunch.
+static void ps2_restart_core1(void) {
+    multicore_reset_core1();
+    multicore_launch_core1(ps2_device_thread);
+}
+
+void ps2_device_start(void) {
+    ds2_init(&s_state);
+    ps2_transport_set_sel_hook(ps2_restart_core1);
+    ps2_transport_enable_sel(true);
+    multicore_launch_core1(ps2_device_thread);
+}
+
+void ps2_device_stop(void) {
+    ps2_transport_enable_sel(false);     // stop further SEL ISRs first
+    ps2_transport_set_sel_hook(NULL);
+    multicore_reset_core1();
+    // Present a centered, all-released pad rather than a dropout.
+    PSXInputState neutral = ds2_neutral_state();
+    shared_input_publish(&neutral);
 }

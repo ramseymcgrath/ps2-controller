@@ -15,6 +15,7 @@
 #include "gamepad_map.h"
 #include "shared_input.h"
 #include "bluepad32_platform.h"
+#include "ps2_device.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -72,15 +73,16 @@ static void ps2_platform_on_device_connected(uni_hid_device_t* d) {
 
 static void ps2_platform_on_device_disconnected(uni_hid_device_t* d) {
     logi("ps2_platform: device disconnected: %p\n", d);
-    // Present a centered, all-released pad to the console rather than a dropout.
     shared_input_set_connected(false);
-    PSXInputState neutral = ds2_neutral_state();
-    shared_input_publish(&neutral);
+    // Take the PS2 side offline: disable SEL IRQ, reset core1, publish neutral.
+    ps2_device_stop();
 }
 
 static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
     logi("ps2_platform: device ready: %p\n", d);
     shared_input_set_connected(true);
+    // Bring the PS2 side online: init protocol state, enable SEL IRQ, launch core1.
+    ps2_device_start();
     return UNI_ERROR_SUCCESS;
 }
 

@@ -49,6 +49,10 @@ void ps2_transport_set_sel_hook(void (*hook)(void)) {
     s_sel_hook = hook;
 }
 
+void ps2_transport_enable_sel(bool enabled) {
+    gpio_set_irq_enabled(PIN_SEL, GPIO_IRQ_EDGE_RISE, enabled);
+}
+
 void ps2_transport_init(void) {
     const uint pins[] = {PIN_DAT, PIN_CMD, PIN_SEL, PIN_CLK, PIN_ACK};
     for (size_t i = 0; i < count_of(pins); i++) {

@@ -1,6 +1,7 @@
 #ifndef PS2_TRANSPORT_H
 #define PS2_TRANSPORT_H
 #include <stdint.h>
+#include <stdbool.h>
 
 // PIO-based PlayStation controller-port SPI slave on pio0.
 //
@@ -28,5 +29,9 @@ void    ps2_restart_pio(void);
 // The device/lifecycle layer registers this to reset+relaunch the core1
 // protocol thread, so each transaction re-starts parsing from byte 0. NULL ok.
 void    ps2_transport_set_sel_hook(void (*hook)(void));
+
+// Enable/disable the SEL-rising IRQ (registered by ps2_transport_init). The
+// lifecycle enables it while a controller is connected, disables on drop.
+void    ps2_transport_enable_sel(bool enabled);
 
 #endif // PS2_TRANSPORT_H
