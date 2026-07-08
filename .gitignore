@@ -1,0 +1,29 @@
+# Build output
+build/
+*.uf2
+*.elf
+*.bin
+*.dis
+*.hex
+*.map
+
+# CMake
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# Pico SDK / submodule build artifacts
+pico-sdk/
+!lib/**/pico-sdk/
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Remember plugin session data
+.remember/
