@@ -20,3 +20,7 @@ add_test(NAME test_smoke COMMAND test_smoke)
 add_executable(test_ds2_protocol test_ds2_protocol.c ../src/ps2_device/ds2_protocol.c)
 target_link_libraries(test_ds2_protocol unity)
 add_test(NAME test_ds2_protocol COMMAND test_ds2_protocol)
+
+add_executable(test_gamepad_map test_gamepad_map.c ../src/input/gamepad_map.c)
+target_link_libraries(test_gamepad_map unity)
+add_test(NAME test_gamepad_map COMMAND test_gamepad_map)
