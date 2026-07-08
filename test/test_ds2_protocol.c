@@ -106,6 +106,21 @@ static void test_exit_config_clears_flag(void) {
     TEST_ASSERT_FALSE(st.config);
 }
 
+static void test_analog_switch_sets_analog_and_lock(void) {
+    ds2_state_t st; ds2_init(&st); st.config = true;   // must be in config
+    const uint8_t req[] = {0x00, 0x01, 0x03, 0x00, 0x00, 0x00}; // analog + lock
+    ds2_apply_request(&st, CMD_ANALOG_SWITCH, req, sizeof req);
+    TEST_ASSERT_EQUAL_HEX8(MODE_ANALOG, st.mode);
+    TEST_ASSERT_TRUE(st.analog_lock);
+}
+
+static void test_analog_switch_ignored_outside_config(void) {
+    ds2_state_t st; ds2_init(&st); st.config = false;  // NOT in config
+    const uint8_t req[] = {0x00, 0x01, 0x03, 0x00, 0x00, 0x00};
+    ds2_apply_request(&st, CMD_ANALOG_SWITCH, req, sizeof req);
+    TEST_ASSERT_EQUAL_HEX8(MODE_DIGITAL, st.mode);     // unchanged
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_neutral_state_defaults);
@@ -117,5 +132,7 @@ int main(void) {
     RUN_TEST(test_analog_poll_reflects_input);
     RUN_TEST(test_enter_config_sets_flag);
     RUN_TEST(test_exit_config_clears_flag);
+    RUN_TEST(test_analog_switch_sets_analog_and_lock);
+    RUN_TEST(test_analog_switch_ignored_outside_config);
     return UNITY_END();
 }

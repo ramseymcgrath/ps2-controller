@@ -14,6 +14,12 @@ static uint8_t id_byte(const ds2_state_t *st) {
     return st->config ? MODE_CONFIG : st->mode;
 }
 
+static uint8_t detect_analog(const ds2_state_t *st) {
+    int sum = st->poll_config[0] + st->poll_config[1]
+            + st->poll_config[2] + st->poll_config[3];
+    return (sum > 0) ? MODE_ANALOG_PRESSURE : MODE_ANALOG;
+}
+
 size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
                     const PSXInputState *in,
                     const uint8_t *req, size_t req_len,
@@ -43,6 +49,10 @@ size_t ds2_response(const ds2_state_t *st, uint8_t cmd,
             for (int i = 0; i < 6 && n < cap; i++) out[n++] = 0x00;
             break;
         }
+        case CMD_ANALOG_SWITCH: {
+            for (int i = 0; i < 5 && n < cap; i++) out[n++] = 0x00;
+            break;
+        }
         default:
             break;
     }
@@ -57,6 +67,12 @@ void ds2_apply_request(ds2_state_t *st, uint8_t cmd,
             break;
         case CMD_CONFIG:
             if (req_len > 1) st->config = (req[1] == 0x01);
+            break;
+        case CMD_ANALOG_SWITCH:
+            if (st->config && req_len > 2) {
+                st->mode = (req[1] == 0x01) ? detect_analog(st) : MODE_DIGITAL;
+                st->analog_lock = (req[2] == 0x03);
+            }
             break;
         default:
             break;
