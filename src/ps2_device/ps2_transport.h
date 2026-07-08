@@ -17,19 +17,17 @@
 // lifecycle enables the SEL IRQ on controller connect.
 void    ps2_transport_init(void);
 
-// Blocking single-byte transfers on the console bus.
-uint8_t ps2_recv_cmd(void);   // read one CMD byte the console shifted in
-void    ps2_send(uint8_t byte); // drive one DAT byte back to the console
-
-// Non-blocking variants: return false immediately if the RX FIFO is empty /
-// the TX FIFO is full, else perform the transfer and return true. core1 uses
-// these so it can poll for a transaction-restart signal instead of blocking
-// forever mid-transaction (see ps2_device.c).
+// Non-blocking single-byte transfers on the console bus: return false
+// immediately if the RX FIFO is empty / the TX FIFO is full, else perform the
+// transfer and return true. core1 uses these so it can poll for a
+// transaction-restart signal instead of blocking mid-transaction (see
+// ps2_device.c). Call from core1 only.
 bool    ps2_try_recv_cmd(uint8_t *out);
 bool    ps2_try_send(uint8_t byte);
 
-// Re-sync both state machines to the start of a transaction. RAM-resident
-// (__time_critical_func) because it runs from the SEL ISR.
+// Re-sync both state machines and their FIFOs to the start of a transaction.
+// Call from core1 only (the sole PIO-FIFO owner), between transactions.
+// RAM-resident (__time_critical_func) as it runs once per transaction.
 void    ps2_restart_pio(void);
 
 // Optional hook the SEL-rising ISR runs immediately after ps2_restart_pio().

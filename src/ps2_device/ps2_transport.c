@@ -10,31 +10,30 @@
                              // *_program, *_program_init, read/write_byte_blocking, PIN_*
 
 // pio0 is used for the PS2 bus; the cyw43 wireless driver uses its own PIO.
+//
+// After ps2_transport_init(), all PIO FIFO access happens on core1 only (the
+// non-blocking helpers below and ps2_restart_pio(), all called from
+// ps2_device_thread). The SEL ISR runs on core0 but touches no PIO state — it
+// only invokes the registered hook — so there is no cross-core FIFO race.
 static uint sm_cmd_reader;
 static uint sm_dat_writer;
 static uint off_cmd_reader;
 static uint off_dat_writer;
 static void (*s_sel_hook)(void);
 
-uint8_t ps2_recv_cmd(void) {
-    return read_byte_blocking(pio0, sm_cmd_reader);
-}
-
-void ps2_send(uint8_t byte) {
-    write_byte_blocking(pio0, sm_dat_writer, byte);
-}
-
 bool ps2_try_recv_cmd(uint8_t *out) {
     if (pio_sm_is_rx_fifo_empty(pio0, sm_cmd_reader))
         return false;
-    *out = read_byte_blocking(pio0, sm_cmd_reader);  // non-empty: will not block
+    // cmd_reader autopushes 8 bits right-shifted into the ISR -> top byte.
+    *out = (uint8_t)(pio_sm_get(pio0, sm_cmd_reader) >> 24);
     return true;
 }
 
 bool ps2_try_send(uint8_t byte) {
     if (pio_sm_is_tx_fifo_full(pio0, sm_dat_writer))
         return false;
-    write_byte_blocking(pio0, sm_dat_writer, byte);  // not full: will not block
+    // Invert: dat_writer drives DAT via pindirs, so a 0 bit -> pin low.
+    pio_sm_put(pio0, sm_dat_writer, ~(uint32_t)byte & 0xFFu);
     return true;
 }
 
@@ -49,12 +48,12 @@ void __time_critical_func(ps2_restart_pio)(void) {
     pio_enable_sm_mask_in_sync(pio0, mask);
 }
 
-// SEL rising edge == console deselected == end of transaction. Re-sync the SMs
-// and let the device layer reset core1 so the next transaction parses cleanly.
+// SEL rising edge == console deselected == end of transaction. The ISR only
+// signals the device layer (which owns the PIO on core1); it deliberately does
+// NOT touch the PIO itself, so it can never race core1's FIFO access.
 static void __time_critical_func(sel_isr)(uint gpio, uint32_t events) {
     if (gpio != PIN_SEL || !(events & GPIO_IRQ_EDGE_RISE))
         return;
-    ps2_restart_pio();
     if (s_sel_hook)
         s_sel_hook();
 }

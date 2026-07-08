@@ -58,22 +58,28 @@ adjust so we don't double-send it.
 ⬜ Config handshake: send `01 43 00 01…` (enter), `01 44 01 03…` (analog+lock),
 `01 43 00 00…` (exit); confirm the ID flips to `0x73` and stays.
 
-## 5. SEL ISR ↔ core1 transaction restart (Task 14) — highest-risk item
+## 5. core1 PIO ownership & restart timing (Task 14) — highest-risk item
 
-The SEL-rising ISR runs `ps2_restart_pio()` (re-syncs and re-enables the SMs)
-then sets a `volatile bool s_restart` (via the registered hook). core1 runs
-continuously and its wait loops (`recv_cmd`/`send_dat` in `ps2_device.c`) poll
-that flag, abandoning the current transaction and re-syncing at the address gate.
-core1 is launched **once** per connection — **not** reset/relaunched per
-transaction (that pattern busy-waits unbounded in the SDK and can hang core0).
-⬜ Verify on the analyzer that a new transaction immediately after SEL-rise is
-parsed from byte 0 (no desync), across many consecutive polls.
-⬜ Confirm the non-blocking poll keeps up: core1 grabs each byte promptly and the
-`s_restart` abort fires within one transaction (no stale response bytes leak into
-the next frame).
-⬜ Watch for a missed restart under back-to-back transactions (the SM restart
-provides byte alignment even if the flag is briefly clobbered, but confirm no
-cumulative drift).
+**core1 is the sole owner of the PIO** after init: the non-blocking helpers
+(`ps2_try_recv_cmd`/`ps2_try_send`) and `ps2_restart_pio()` all run on core1.
+The SEL-rising ISR (core0) does **nothing** but set `volatile bool s_restart` —
+it touches no PIO state — so there is no cross-core FIFO race. core1's loop
+processes a transaction, waits for the SEL rise (`s_restart`), then calls
+`ps2_restart_pio()` itself during the inter-transaction gap. core1 is launched
+**once** per connection (never reset/relaunched per transaction).
+
+The one thing to verify on hardware is **restart timing**: core1 must call
+`ps2_restart_pio()` in the gap between one transaction's SEL-rise and the next
+transaction's first clock. core1's reaction is a few instructions (~tens of ns)
+and the PS2 inter-poll gap is ~100 µs+, so the margin is large — but confirm it:
+⬜ On the analyzer, over many consecutive polls, every transaction is parsed from
+byte 0 (address `0x01`), the response is byte-aligned, and ACK lands correctly —
+no cumulative drift.
+⬜ Confirm no stale byte from an aborted/short transaction leaks into the next
+frame (the per-transaction `ps2_restart_pio()` clears RX and drains TX, but only
+core1 does this, so verify the ordering holds under real timing).
+⬜ Stress the abort path: a game/console that cuts a transaction short (fewer
+bytes than the full frame) must still resync cleanly on the next poll.
 
 ## 6. Real console (Task 14) & polish (Task 15)
 
