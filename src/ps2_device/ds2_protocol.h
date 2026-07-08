@@ -6,7 +6,9 @@
 #include "input_state.h"
 
 typedef struct {
-    uint8_t mode;            // MODE_DIGITAL / MODE_ANALOG / MODE_ANALOG_PRESSURE
+    uint8_t mode;            // MODE_DIGITAL or MODE_ANALOG. MODE_ANALOG_PRESSURE
+                             // (0x79) is unreachable in the MVP — the emulator is
+                             // clamped to analog; pressure is deferred to M5.
     bool    config;          // in config/escape mode
     bool    analog_lock;
     uint8_t poll_config[4];
