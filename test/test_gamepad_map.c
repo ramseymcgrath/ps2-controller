@@ -5,10 +5,8 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-// BluePad32 bit values (from uni_gamepad.h) mirrored for the host test.
-#define DPAD_UP 0x01
-#define BP_BTN_X 0x0008  // square on DS
-#define BP_BTN_A 0x0001  // cross
+// Button/dpad/misc bit masks come from gamepad_map.h (BP_DPAD_*/BP_BTN_*/BP_MISC_*),
+// the single source of truth that bluepad32_platform.c static_asserts against <uni.h>.
 
 static gamepad_snapshot_t neutral_snapshot(void) {
     gamepad_snapshot_t g = {0};
@@ -27,7 +25,7 @@ static void test_neutral_maps_to_neutral(void) {
 
 static void test_dpad_up_clears_up_bit(void) {
     gamepad_snapshot_t g = neutral_snapshot();
-    g.dpad = DPAD_UP;
+    g.dpad = BP_DPAD_UP;
     PSXInputState out;
     map_gamepad_to_psx(&g, &out);
     TEST_ASSERT_EQUAL_HEX8(0x00, out.buttons1 & PS_UP); // active-low: pressed => 0
