@@ -24,3 +24,7 @@ add_test(NAME test_ds2_protocol COMMAND test_ds2_protocol)
 add_executable(test_gamepad_map test_gamepad_map.c ../src/input/gamepad_map.c)
 target_link_libraries(test_gamepad_map unity)
 add_test(NAME test_gamepad_map COMMAND test_gamepad_map)
+
+add_executable(test_port_router test_port_router.c ../src/input/port_router.c)
+target_link_libraries(test_port_router unity)
+add_test(NAME test_port_router COMMAND test_port_router)
