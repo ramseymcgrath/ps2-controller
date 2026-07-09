@@ -64,6 +64,16 @@ static void test_hue_never_exceeds_cap(void) {
     }
 }
 
+static void test_hue_wraps_near_red(void) {
+    // hue is circular: 255 must sit one small step from red (0), so s_hue
+    // overflowing 255->0 has no visible seam. Full red channel, no green,
+    // at most a couple units of blue.
+    uint32_t c = hue_to_rgb(255);
+    TEST_ASSERT_EQUAL_UINT8(STATUS_MAX_BRIGHTNESS, R(c));
+    TEST_ASSERT_EQUAL_UINT8(0, G(c));
+    TEST_ASSERT_TRUE(B(c) <= 2);
+}
+
 // --- status_color ---
 
 static void test_boot_is_off(void) {
@@ -112,6 +122,7 @@ int main(void) {
     RUN_TEST(test_activity_held_button_does_not_readd);
     RUN_TEST(test_hue_zero_is_red);
     RUN_TEST(test_hue_never_exceeds_cap);
+    RUN_TEST(test_hue_wraps_near_red);
     RUN_TEST(test_boot_is_off);
     RUN_TEST(test_connected_is_hue);
     RUN_TEST(test_searching_breathes_monotonic_rising);

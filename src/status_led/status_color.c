@@ -26,8 +26,12 @@ uint32_t input_activity(const PSXInputState *cur, const PSXInputState *prev) {
 
 uint32_t hue_to_rgb(uint8_t hue) {
     uint8_t max = STATUS_MAX_BRIGHTNESS;
-    uint8_t region = hue / 43u;                 // 0..5
-    uint8_t up = scale(max, (uint8_t)((hue % 43u) * 6u));
+    // Spread the 256 hues across 6 sectors via hue*6 (not hue/43, whose 6th
+    // sector was compressed to 41 values and left a ~3-unit seam at the 255->0
+    // wrap). Here hue=255 -> rgb(max,0,1), one step from red at hue=0.
+    uint16_t h6 = (uint16_t)hue * 6u;           // 0..1530
+    uint8_t region = (uint8_t)(h6 >> 8);        // 0..5
+    uint8_t up = scale(max, (uint8_t)(h6 & 0xFFu));
     uint8_t down = (uint8_t)(max - up);
     switch (region) {
         case 0:  return rgb(max,  up,   0);
