@@ -172,9 +172,10 @@ and `hue_to_rgb`; no returned channel exceeds it.
   g_pending_activity) >> SHIFT` (only while `CONNECTED`), then clears
   `g_pending_activity`. Neutral sticks + no presses → activity 0 → hue parks.
 - `g_pending_activity` is touched by a core0 thread (`note_input`) and the core0
-  timer IRQ (render). A dropped/duplicated increment is cosmetically invisible;
-  the render tick's read-add-clear briefly masks its own re-entry, sufficient on
-  one core.
+  timer IRQ (render). It is a **lock-free atomic accumulator**: the producer adds
+  with `__atomic_fetch_add(..., __ATOMIC_RELAXED)` and the render tick drains it
+  with `__atomic_exchange_n(&g_pending_activity, 0, __ATOMIC_RELAXED)`, so an IRQ
+  landing mid-update can neither lose nor double-count activity.
 
 ## Data Flow
 
