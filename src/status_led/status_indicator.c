@@ -56,6 +56,9 @@ static bool render_cb(repeating_timer_t *t) {
 }
 
 void status_indicator_init(void) {
+    if (__atomic_load_n(&s_enabled, __ATOMIC_RELAXED))
+        return;                                  // idempotent: already initialized
+
     s_prev_input = ds2_neutral_state();
 
     // Claim the SM first. It is the only step here that can fail at runtime
