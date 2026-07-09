@@ -98,3 +98,16 @@ erratic, adjust the `dat_writer`/`cmd_reader` clock edge (`wait 1` vs `wait 0` o
 ⬜ **BLE controllers:** we build BluePad32's BLE HID path (bundled btstack). If a
 BLE-only controller fails to connect, verify against a Classic controller first
 to isolate BLE from the rest of the stack.
+
+## Status LED (WS2812 on GP16)
+
+Wire a WS2812/WS2812B/SK6812 data-in to GP16 (5 V pixels need a level shifter),
+common ground, and appropriate supply. Then verify:
+
+- [ ] At power-on before BT is up: LED off (BOOT).
+- [ ] After BT init: slow amber breathing (SEARCHING).
+- [ ] Force a cyw43 init failure (e.g. no RM2 module): steady ~2 Hz red blink (ERROR).
+- [ ] Connect a controller: LED leaves amber; parks on a static color when idle (CONNECTED).
+- [ ] Move sticks / mash buttons: hue flows (rainbow); faster with more movement, parks when hands off.
+- [ ] Confirm the PS2 side still works (LED shares no resources with pio0/core1):
+      controller input reaches the console unchanged.
