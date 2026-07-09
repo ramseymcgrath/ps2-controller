@@ -84,16 +84,21 @@ void status_indicator_init(void) {
         pio_sm_set_enabled(s_pio, s_sm, false);  // ws2812_program_init enabled it
         pio_remove_program(s_pio, &ws2812_program, off);
         pio_sm_unclaim(s_pio, s_sm);
+        gpio_deinit(STATUS_LED_PIN);             // undo ws2812's pio_gpio_init on the pin
         return;
     }
     __atomic_store_n(&s_enabled, true, __ATOMIC_RELAXED);
 }
 
 void status_indicator_set(status_state_t s) {
+    if (!__atomic_load_n(&s_enabled, __ATOMIC_RELAXED))
+        return;                                  // no-op when the LED is disabled
     __atomic_store_n(&s_state, s, __ATOMIC_RELAXED);
 }
 
 void status_indicator_note_input(const PSXInputState *s) {
+    if (!__atomic_load_n(&s_enabled, __ATOMIC_RELAXED))
+        return;                                  // no-op when the LED is disabled
     __atomic_fetch_add(&s_pending_activity, input_activity(s, &s_prev_input), __ATOMIC_RELAXED);
     s_prev_input = *s;
 }
