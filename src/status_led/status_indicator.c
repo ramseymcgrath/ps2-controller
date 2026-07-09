@@ -15,7 +15,7 @@
 
 static PIO  s_pio = STATUS_PIO;
 static uint s_sm;
-static bool s_enabled = false;
+static volatile bool s_enabled = false;
 
 static volatile status_state_t s_state = STATUS_BOOT;
 // Atomic activity accumulator (note_input thread -> render IRQ, both core0):

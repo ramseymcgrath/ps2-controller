@@ -38,8 +38,11 @@ int main(void) {
     if (cyw43_arch_init()) {
         loge("failed to initialise cyw43_arch\n");
         status_indicator_set(STATUS_ERROR);
+        // Spin rather than return: the core0 alarm-pool timer keeps blinking the
+        // red error state. Assumes no watchdog is enabled (SDK default), else this
+        // would reset-loop.
         while (true)
-            tight_loop_contents();   // keep the render timer blinking red
+            tight_loop_contents();
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
