@@ -8,6 +8,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ps2_device
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/input
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/status_led
 )
 
 add_library(unity STATIC unity/unity.c)
@@ -24,3 +25,7 @@ add_test(NAME test_ds2_protocol COMMAND test_ds2_protocol)
 add_executable(test_gamepad_map test_gamepad_map.c ../src/input/gamepad_map.c)
 target_link_libraries(test_gamepad_map unity)
 add_test(NAME test_gamepad_map COMMAND test_gamepad_map)
+
+add_executable(test_status_color test_status_color.c ../src/status_led/status_color.c)
+target_link_libraries(test_status_color unity)
+add_test(NAME test_status_color COMMAND test_status_color)
