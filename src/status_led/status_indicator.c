@@ -18,7 +18,10 @@ static uint s_sm;
 static bool s_enabled = false;
 
 static volatile status_state_t s_state = STATUS_BOOT;
-static volatile uint32_t s_pending_activity = 0;  // note_input (thread) -> render (IRQ)
+// Atomic activity accumulator (note_input thread -> render IRQ, both core0):
+// the producer adds with __atomic_fetch_add, the render tick drains it to 0 with
+// __atomic_exchange_n. Lock-free; no lost or double-counted activity.
+static volatile uint32_t s_pending_activity = 0;
 static PSXInputState s_prev_input;                // core0 note_input only
 static uint8_t s_hue = 0;                         // render tick only
 
@@ -38,8 +41,7 @@ static bool render_cb(repeating_timer_t *t) {
 
     status_state_t st = s_state;
     if (st == STATUS_CONNECTED) {
-        uint32_t act = s_pending_activity;
-        s_pending_activity -= act;   // subtract consumed (keeps concurrent adds)
+        uint32_t act = __atomic_exchange_n(&s_pending_activity, 0, __ATOMIC_RELAXED);
         s_hue = (uint8_t)(s_hue +
             (uint8_t)((act * STATUS_RAINBOW_GAIN) >> STATUS_RAINBOW_SHIFT));
     }
@@ -79,6 +81,6 @@ void status_indicator_set(status_state_t s) {
 }
 
 void status_indicator_note_input(const PSXInputState *s) {
-    s_pending_activity += input_activity(s, &s_prev_input);
+    __atomic_fetch_add(&s_pending_activity, input_activity(s, &s_prev_input), __ATOMIC_RELAXED);
     s_prev_input = *s;
 }
