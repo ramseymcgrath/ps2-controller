@@ -22,8 +22,11 @@ jobs:
       - name: Install ARM toolchain and build deps
         run: |
           sudo apt-get update
+          # libstdc++-arm-none-eabi-newlib: the CXX-enabled build pulls C++ SDK
+          # TUs (pico/assert.h -> <cassert>); the distro gcc-arm-none-eabi package
+          # ships only the C library, so the C++ headers are a separate package.
           sudo apt-get install -y --no-install-recommends \
-            gcc-arm-none-eabi libnewlib-arm-none-eabi \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib \
             cmake ninja-build \
             libusb-1.0-0-dev pkg-config build-essential
           arm-none-eabi-gcc --version | head -1
