@@ -28,16 +28,23 @@ add_executable(ps2_controller
     src/ps2_device/ps2_transport.c
     src/ps2_device/ds2_protocol.c
     src/ps2_device/ps2_device.c
+    src/status_led/status_color.c
+    src/status_led/status_indicator.c
 )
 
 # Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.
 pico_generate_pio_header(ps2_controller
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2_device/psxSPI.pio)
 
+# Reuse the SDK's WS2812 program for the status LED (ws2812_program + init).
+pico_generate_pio_header(ps2_controller
+    ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio)
+
 target_include_directories(ps2_controller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2_device
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/status_led
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include
 )
 
@@ -55,6 +62,8 @@ target_link_libraries(ps2_controller PUBLIC
     pico_btstack_cyw43
     pico_multicore
     hardware_pio
+    hardware_timer
+    hardware_clocks
     bluepad32
 )
 
