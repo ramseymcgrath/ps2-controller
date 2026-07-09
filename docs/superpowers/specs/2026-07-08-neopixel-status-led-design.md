@@ -55,8 +55,8 @@ pixel is external with an explicit pin.
 - One WS2812 / WS2812B / SK6812 pixel, single-wire on `STATUS_LED_PIN`
   (default `GP16`; free — PS2 owns GP5–GP9, CYW43 owns GP23–GP25/GP29; not ADC).
 - A 5 V pixel needs a data-line level shifter (board concern, out of scope).
-- Can be disabled at compile time (`STATUS_LED_ENABLED`), in which case the
-  module compiles to no-ops.
+- If the pixel can't be initialized (or no pixel is attached), the module
+  disables itself at runtime and all calls become no-ops — see Error Handling.
 
 ## SDK Reuse — WS2812 mechanics
 
@@ -139,11 +139,13 @@ void status_indicator_note_input(const PSXInputState *s); // core0 input publish
 Writers on **core0** (BluePad32 callbacks, fault sites); the render timer also
 runs on core0, so plain `volatile` words suffice — no seqlock:
 
-- `volatile status_state_t g_state`
-- `volatile uint32_t g_pending_activity` — accumulated by `note_input`,
+- `volatile status_state_t s_state`
+- `volatile uint32_t s_pending_activity` — accumulated by `note_input`,
   consumed by the render tick
-- `g_hue` (uint8_t) — rainbow phase; written and read **only** by the render
+- `s_hue` (uint8_t) — rainbow phase; written and read **only** by the render
   tick, so it needs no `volatile` and crosses no context boundary
+
+(These are file-scope statics in `status_indicator.c`, named `s_*`.)
 
 ### Palette — `status_color(state, phase, hue)`
 
@@ -166,15 +168,15 @@ and `hue_to_rgb`; no returned channel exceeds it.
   (`prev & ~cur`).
 - `status_indicator_note_input()` runs on each BluePad32 publish (core0);
   computes `input_activity` against the module's previous snapshot and does
-  `g_pending_activity += activity`. Capturing at publish time (not sampling in
+  `s_pending_activity += activity`. Capturing at publish time (not sampling in
   the timer) means fast taps between render ticks are not missed.
-- The 50 Hz render tick advances `g_hue += (STATUS_RAINBOW_GAIN *
-  g_pending_activity) >> SHIFT` (only while `CONNECTED`), then clears
-  `g_pending_activity`. Neutral sticks + no presses → activity 0 → hue parks.
-- `g_pending_activity` is touched by a core0 thread (`note_input`) and the core0
+- The 50 Hz render tick advances `s_hue += (STATUS_RAINBOW_GAIN *
+  s_pending_activity) >> SHIFT` (only while `CONNECTED`), then drains
+  `s_pending_activity`. Neutral sticks + no presses → activity 0 → hue parks.
+- `s_pending_activity` is touched by a core0 thread (`note_input`) and the core0
   timer IRQ (render). It is a **lock-free atomic accumulator**: the producer adds
   with `__atomic_fetch_add(..., __ATOMIC_RELAXED)` and the render tick drains it
-  with `__atomic_exchange_n(&g_pending_activity, 0, __ATOMIC_RELAXED)`, so an IRQ
+  with `__atomic_exchange_n(&s_pending_activity, 0, __ATOMIC_RELAXED)`, so an IRQ
   landing mid-update can neither lose nor double-count activity.
 
 ## Data Flow
@@ -182,9 +184,9 @@ and `hue_to_rgb`; no returned channel exceeds it.
 1. BluePad32 connect/disconnect → `status_indicator_set(CONNECTED | SEARCHING)`.
 2. BluePad32 input publish → `status_indicator_note_input(&s)` (activity).
 3. 50 Hz `repeating_timer` (SDK `add_repeating_timer_ms`):
-   - advance `g_hue` from `g_pending_activity` (if `CONNECTED`);
+   - advance `s_hue` from `s_pending_activity` (if `CONNECTED`);
    - compute `phase` from a millisecond clock;
-   - `color = status_color(g_state, phase, g_hue)`;
+   - `color = status_color(s_state, phase, s_hue)`;
    - pack to WS2812 wire order and push one word (3 non-blocking FIFO writes).
 
 Nothing blocks, touches `pio0`, or crosses to core1.
@@ -210,7 +212,7 @@ normally. Timer-start failure is treated the same way. Never fatal.
 
 ## Testing
 
-Host unit tests (`test/test_status_indicator.c`) on the pure functions:
+Host unit tests (`test/test_status_color.c`) on the pure functions:
 
 - `input_activity`: neutral+no-buttons → 0; full deflection → near max; monotonic
   in deflection; a fresh press adds energy, a held button does not re-add
@@ -240,7 +242,7 @@ checklist, `docs/bringup.md`).
   ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio)`; link
   `hardware_pio`, `hardware_timer`, `hardware_clocks`. Do **not** link
   `pico_status_led`.
-- `test/CMakeLists.txt` — add `test_status_indicator`.
+- `test/CMakeLists.txt` — add `test_status_color`.
 
 ## Risks
 
