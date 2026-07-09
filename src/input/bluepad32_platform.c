@@ -73,14 +73,14 @@ static void ps2_platform_on_device_connected(uni_hid_device_t* d) {
 
 static void ps2_platform_on_device_disconnected(uni_hid_device_t* d) {
     logi("ps2_platform: device disconnected: %p\n", d);
-    shared_input_set_connected(false);
+    shared_input_set_connected(0, false);
     // Take the PS2 side offline: disable SEL IRQ, reset core1, publish neutral.
     ps2_device_stop();
 }
 
 static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
     logi("ps2_platform: device ready: %p\n", d);
-    shared_input_set_connected(true);
+    shared_input_set_connected(0, true);
     // Bring the PS2 side online: init protocol state, enable SEL IRQ, launch core1.
     ps2_device_start();
     return UNI_ERROR_SUCCESS;
@@ -106,7 +106,7 @@ static void ps2_platform_on_controller_data(uni_hid_device_t* d, uni_controller_
 
     PSXInputState st;
     map_gamepad_to_psx(&snap, &st);
-    shared_input_publish(&st);
+    shared_input_publish(0, &st);
 }
 
 static const uni_property_t* ps2_platform_get_property(uni_property_idx_t idx) {
@@ -139,5 +139,5 @@ struct uni_platform* get_ps2_platform(void) {
 }
 
 bool bp_controller_connected(void) {
-    return shared_input_connected();
+    return shared_input_connected(0);
 }

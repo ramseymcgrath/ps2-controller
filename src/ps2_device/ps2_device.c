@@ -68,7 +68,7 @@ static void process_one_transaction(void) {
     if (!recv_cmd(&cmd))
         return;
 
-    PSXInputState in = shared_input_snapshot();  // tear-free snapshot from core0
+    PSXInputState in = shared_input_snapshot(0);  // tear-free snapshot from core0
 
     // resp[0] is the ID already sent; resp[1..] is 0x5A + payload. req is unknown
     // at build time, so offset-dependent descriptor commands (0x46/0x4C) serve
@@ -128,5 +128,5 @@ void ps2_device_stop(void) {
     multicore_reset_core1();             // one-time teardown (not per-transaction)
     // Present a centered, all-released pad rather than a dropout.
     PSXInputState neutral = ds2_neutral_state();
-    shared_input_publish(&neutral);
+    shared_input_publish(0, &neutral);
 }
