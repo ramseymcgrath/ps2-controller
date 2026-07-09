@@ -93,8 +93,12 @@ place the SM on `pio2` ourselves.
 - Uses 1 program slot + 1 of `pio2`'s 4 SMs.
 - Ownership stays clean: `pio0` = PS2 bus (core1 exclusive), CYW43 = whichever
   PIO its driver auto-claims, `pio2` = status LED (core0).
-- **Init ordering:** initialize *after* cyw43/BluePad32 init so `pio2` is claimed
-  last and deterministically free.
+- **Init ordering:** initialize **early** — right after `set_sys_clock` /
+  `stdio_init_all`, *before* `cyw43_arch_init()`. The LED needs only the system
+  clock and `pio2` (both available then), and the render timer runs on the SDK
+  alarm pool independent of the BT run loop. Initializing first lets a
+  cyw43/BT init failure show a red error blink. `pio2` stays free for us because
+  cyw43's auto-claim takes `pio0` first; we take `pio2` explicitly.
 
 ## Module Layout — `src/status_led/`
 
@@ -221,10 +225,14 @@ checklist, `docs/bringup.md`).
 ## Integration Points (files touched)
 
 - `src/status_led/*` — new module (`status_indicator.c/.h`).
-- `src/main.c` — `status_indicator_init()` at startup (after cyw43/BT init);
-  set `STATUS_BOOT`, then `STATUS_SEARCHING` once BT is up.
-- `src/input/bluepad32_platform.c` — `status_indicator_set()` on connect/
-  disconnect; `status_indicator_note_input(&s)` at the input-publish site.
+- `src/main.c` — `status_indicator_init()` right after `stdio_init_all()`
+  (before `cyw43_arch_init()`); initial state `STATUS_BOOT`. On cyw43-init
+  failure, `status_indicator_set(STATUS_ERROR)` and spin so the red blink shows.
+- `src/input/bluepad32_platform.c` — `status_indicator_set(STATUS_SEARCHING)` in
+  `on_init_complete`; `STATUS_CONNECTED` in `on_device_ready`;
+  `STATUS_SEARCHING` in `on_device_disconnected`;
+  `status_indicator_note_input(&st)` after `shared_input_publish` in
+  `on_controller_data`.
 - Fault sites (e.g. BT init failure) — `status_indicator_set(STATUS_ERROR)`.
 - `CMakeLists.txt` — set `PICO_BOARD pimoroni_pico_plus2_w_rp2350`; add
   `status_indicator.c`; `pico_generate_pio_header(<target>
@@ -235,8 +243,8 @@ checklist, `docs/bringup.md`).
 
 ## Risks
 
-- **SM/PIO contention with CYW43** — mitigated by claiming `pio2` after cyw43
-  init; `pio2` is otherwise untouched.
+- **SM/PIO contention with CYW43** — none: cyw43's auto-claim takes `pio0`
+  first, and we take `pio2` explicitly; `pio2` is otherwise untouched.
 - **Timer-IRQ contention with btstack** — WS2812 push is a few FIFO writes;
   negligible. Fallback: render in the core0 main loop.
 - **`PICO_BOARD` change affects the whole build** — flash/PSRAM/package differ
