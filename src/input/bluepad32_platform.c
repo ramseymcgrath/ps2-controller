@@ -16,6 +16,7 @@
 #include "shared_input.h"
 #include "bluepad32_platform.h"
 #include "ps2_device.h"
+#include "port_router.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -40,6 +41,9 @@ _Static_assert(BP_BTN_R3 == BUTTON_THUMB_R, "R3 mask drift");
 _Static_assert(BP_MISC_SELECT == MISC_BUTTON_SELECT, "select mask drift");
 _Static_assert(BP_MISC_START == MISC_BUTTON_START,   "start mask drift");
 
+// Maps each connected Bluetooth controller to a PS2 port (connection order).
+static port_router_t s_router;
+
 //
 // Platform overrides
 //
@@ -47,6 +51,7 @@ static void ps2_platform_init(int argc, const char** argv) {
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
     shared_input_init();
+    port_router_init(&s_router);
     logi("ps2_platform: init()\n");
 }
 
@@ -73,23 +78,32 @@ static void ps2_platform_on_device_connected(uni_hid_device_t* d) {
 
 static void ps2_platform_on_device_disconnected(uni_hid_device_t* d) {
     logi("ps2_platform: device disconnected: %p\n", d);
-    shared_input_set_connected(0, false);
-    // Take the PS2 side offline: disable SEL IRQ, reset core1, publish neutral.
-    ps2_device_stop();
+    int port = port_router_lookup(&s_router, d);
+    if (port == PORT_NONE)
+        return;                                  // never assigned (both ports were full)
+    shared_input_set_connected((unsigned)port, false);
+    ps2_device_stop((unsigned)port);             // take this port offline, publish neutral
+    port_router_release(&s_router, d);
 }
 
 static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
     logi("ps2_platform: device ready: %p\n", d);
-    shared_input_set_connected(0, true);
-    // Bring the PS2 side online: init protocol state, enable SEL IRQ, launch core1.
-    ps2_device_start();
+    int port = port_router_assign(&s_router, d);
+    if (port == PORT_NONE) {
+        logi("ps2_platform: both ports in use; ignoring extra controller\n");
+        return UNI_ERROR_SUCCESS;
+    }
+    shared_input_set_connected((unsigned)port, true);
+    ps2_device_start((unsigned)port);            // bring this port online
     return UNI_ERROR_SUCCESS;
 }
 
 static void ps2_platform_on_controller_data(uni_hid_device_t* d, uni_controller_t* ctl) {
-    ARG_UNUSED(d);
     if (ctl->klass != UNI_CONTROLLER_CLASS_GAMEPAD)
         return;
+    int port = port_router_lookup(&s_router, d);
+    if (port == PORT_NONE)
+        return;                                  // data from an unassigned controller
 
     const uni_gamepad_t* gp = &ctl->gamepad;
     gamepad_snapshot_t snap = {
@@ -106,7 +120,7 @@ static void ps2_platform_on_controller_data(uni_hid_device_t* d, uni_controller_
 
     PSXInputState st;
     map_gamepad_to_psx(&snap, &st);
-    shared_input_publish(0, &st);
+    shared_input_publish((unsigned)port, &st);
 }
 
 static const uni_property_t* ps2_platform_get_property(uni_property_idx_t idx) {
@@ -139,5 +153,8 @@ struct uni_platform* get_ps2_platform(void) {
 }
 
 bool bp_controller_connected(void) {
-    return shared_input_connected(0);
+    for (unsigned p = 0; p < PS2_NUM_PORTS; p++)
+        if (shared_input_connected(p))
+            return true;
+    return false;
 }

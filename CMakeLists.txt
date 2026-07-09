@@ -24,6 +24,7 @@ add_executable(ps2_controller
     src/main.c
     src/input/bluepad32_platform.c
     src/input/gamepad_map.c
+    src/input/port_router.c
     src/input/shared_input.c
     src/ps2_device/ps2_transport.c
     src/ps2_device/ds2_protocol.c
