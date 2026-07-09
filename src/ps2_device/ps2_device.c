@@ -12,6 +12,7 @@
 #define REQ_CAP  32
 
 static ds2_state_t s_state;
+static ps2_transport_t s_transport;   // port 0 (pio0, GP5-9)
 
 // Set by the SEL-rising ISR (core0) when the console deselects (transaction
 // end); polled by the core1 loop. This is the ONLY thing the ISR does — it
@@ -30,7 +31,7 @@ static void ps2_signal_restart(void) {
 // past the current transaction.
 static bool recv_cmd(uint8_t *out) {
     while (!s_restart) {
-        if (ps2_try_recv_cmd(out))
+        if (ps2_try_recv_cmd(&s_transport, out))
             return true;
         tight_loop_contents();
     }
@@ -40,7 +41,7 @@ static bool recv_cmd(uint8_t *out) {
 // Send one DAT byte, bailing out if the transaction ended. false => aborted.
 static bool send_dat(uint8_t byte) {
     while (!s_restart) {
-        if (ps2_try_send(byte))
+        if (ps2_try_send(&s_transport, byte))
             return true;
         tight_loop_contents();
     }
@@ -104,21 +105,26 @@ void ps2_device_thread(void) {
         // core1 the sole PIO-FIFO owner and never restarts mid-transaction.
         while (!s_restart)
             tight_loop_contents();
-        ps2_restart_pio();
+        ps2_restart_pio(&s_transport);
     }
 }
 
 void ps2_device_start(void) {
     ds2_init(&s_state);
     s_restart = false;
-    ps2_transport_set_sel_hook(ps2_signal_restart);
-    ps2_transport_enable_sel(true);
+    ps2_transport_set_sel_hook(&s_transport, ps2_signal_restart);
+    ps2_transport_enable_sel(&s_transport, true);
     multicore_launch_core1(ps2_device_thread);   // one-time launch for the connection
 }
 
+void ps2_device_global_init(void) {
+    ps2_transport_global_init();
+    ps2_transport_init(&s_transport, pio0, 5);
+}
+
 void ps2_device_stop(void) {
-    ps2_transport_enable_sel(false);     // stop further SEL ISRs first
-    ps2_transport_set_sel_hook(NULL);
+    ps2_transport_enable_sel(&s_transport, false);     // stop further SEL ISRs first
+    ps2_transport_set_sel_hook(&s_transport, NULL);
     multicore_reset_core1();             // one-time teardown (not per-transaction)
     // Present a centered, all-released pad rather than a dropout.
     PSXInputState neutral = ds2_neutral_state();

@@ -13,7 +13,7 @@
 
 #include "sdkconfig.h"
 #include "bluepad32_platform.h"
-#include "ps2_transport.h"
+#include "ps2_device.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -37,7 +37,7 @@ int main(void) {
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
     // Claim pio0 SMs after cyw43 has taken its own PIO resources.
-    ps2_transport_init();
+    ps2_device_global_init();
 
     uni_platform_set_custom(get_ps2_platform());
     uni_init(0, NULL);

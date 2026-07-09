@@ -12,6 +12,11 @@
 // here, so it persists across transactions.
 void ps2_device_thread(void);
 
+// One-time init from core0 (main): register the shared SEL callback and
+// initialize the port-0 transport (pio0, GP5-9). Call before controllers
+// connect. (Task 4 extends this to init both ports and launch core1 once.)
+void ps2_device_global_init(void);
+
 // Bring the PS2 device online (call on controller connect, from core0):
 // reset protocol state to power-on, install the SEL restart hook, enable the
 // SEL IRQ, and launch core1.
