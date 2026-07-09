@@ -16,6 +16,7 @@
 #include "shared_input.h"
 #include "bluepad32_platform.h"
 #include "ps2_device.h"
+#include "status_indicator.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -54,6 +55,7 @@ static void ps2_platform_on_init_complete(void) {
     logi("ps2_platform: on_init_complete()\n");
     uni_bt_start_scanning_and_autoconnect_unsafe();
     uni_bt_del_keys_unsafe();
+    status_indicator_set(STATUS_SEARCHING);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 }
 
@@ -76,6 +78,7 @@ static void ps2_platform_on_device_disconnected(uni_hid_device_t* d) {
     shared_input_set_connected(false);
     // Take the PS2 side offline: disable SEL IRQ, reset core1, publish neutral.
     ps2_device_stop();
+    status_indicator_set(STATUS_SEARCHING);
 }
 
 static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
@@ -83,6 +86,7 @@ static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
     shared_input_set_connected(true);
     // Bring the PS2 side online: init protocol state, enable SEL IRQ, launch core1.
     ps2_device_start();
+    status_indicator_set(STATUS_CONNECTED);
     return UNI_ERROR_SUCCESS;
 }
 
@@ -107,6 +111,7 @@ static void ps2_platform_on_controller_data(uni_hid_device_t* d, uni_controller_
     PSXInputState st;
     map_gamepad_to_psx(&snap, &st);
     shared_input_publish(&st);
+    status_indicator_note_input(&st);
 }
 
 static const uni_property_t* ps2_platform_get_property(uni_property_idx_t idx) {

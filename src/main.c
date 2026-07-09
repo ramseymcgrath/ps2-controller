@@ -14,6 +14,7 @@
 #include "sdkconfig.h"
 #include "bluepad32_platform.h"
 #include "ps2_transport.h"
+#include "status_indicator.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -29,10 +30,16 @@ int main(void) {
     set_sys_clock_khz(SYS_CLOCK_KHZ, true);
     stdio_init_all();
 
+    // Bring the status LED up first (needs only the clock + pio2). Its render
+    // timer runs on the SDK alarm pool, so it works even if BT init fails below.
+    status_indicator_init();
+
     // Enables Bluetooth too (CYW43_ENABLE_BLUETOOTH). Must precede uni_init().
     if (cyw43_arch_init()) {
         loge("failed to initialise cyw43_arch\n");
-        return -1;
+        status_indicator_set(STATUS_ERROR);
+        while (true)
+            tight_loop_contents();   // keep the render timer blinking red
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
