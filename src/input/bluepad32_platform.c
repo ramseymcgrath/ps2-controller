@@ -17,6 +17,7 @@
 #include "bluepad32_platform.h"
 #include "ps2_device.h"
 #include "port_router.h"
+#include "status_indicator.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -59,6 +60,7 @@ static void ps2_platform_on_init_complete(void) {
     logi("ps2_platform: on_init_complete()\n");
     uni_bt_start_scanning_and_autoconnect_unsafe();
     uni_bt_del_keys_unsafe();
+    status_indicator_set(STATUS_SEARCHING);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 }
 
@@ -84,6 +86,13 @@ static void ps2_platform_on_device_disconnected(uni_hid_device_t* d) {
     shared_input_set_connected((unsigned)port, false);
     ps2_device_stop((unsigned)port);             // take this port offline, publish neutral
     port_router_release(&s_router, d);
+    // LED reflects the aggregate connected-port count.
+    unsigned n = 0;
+    for (unsigned p = 0; p < PS2_NUM_PORTS; p++)
+        if (shared_input_connected(p)) n++;
+    status_indicator_set(n == 0 ? STATUS_SEARCHING
+                       : n >= 2 ? STATUS_CONNECTED_2P
+                                : STATUS_CONNECTED_1P);
 }
 
 static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
@@ -95,6 +104,10 @@ static uni_error_t ps2_platform_on_device_ready(uni_hid_device_t* d) {
     }
     shared_input_set_connected((unsigned)port, true);
     ps2_device_start((unsigned)port);            // bring this port online
+    unsigned n = 0;
+    for (unsigned p = 0; p < PS2_NUM_PORTS; p++)
+        if (shared_input_connected(p)) n++;
+    status_indicator_set(n >= 2 ? STATUS_CONNECTED_2P : STATUS_CONNECTED_1P);
     return UNI_ERROR_SUCCESS;
 }
 

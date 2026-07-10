@@ -29,6 +29,7 @@ add_executable(ps2_controller
     src/ps2_device/ps2_transport.c
     src/ps2_device/ds2_protocol.c
     src/ps2_device/ps2_device.c
+    src/status_led/status_indicator.c
 )
 
 # Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.
