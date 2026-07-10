@@ -102,7 +102,7 @@ to isolate BLE from the rest of the stack.
 ## Two controllers (dual port)
 
 - [ ] Port 0 alone: connect one pad, verify it works on console port 1 (as before).
-- [ ] Port 1 alone: connect one pad, verify it works on console port 2 (GP10–14).
+- [ ] Port 1 alone: connect one pad, verify it works on console port 2 (GP11–15).
 - [ ] Both: connect two pads; verify player 1 and player 2 are independent and
       neither drops input while the other is active (the console polls ports
       sequentially — watch for missed ACK / dropped frames on a logic analyzer).

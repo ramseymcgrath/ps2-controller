@@ -36,7 +36,7 @@ int main(void) {
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    // Init both port transports (pio0 GP5-9, pio1 GP10-14) after cyw43 has taken
+    // Init both port transports (pio0 GP6-10, pio1 GP11-15) after cyw43 has taken
     // its own PIO resources, and launch the single core1 PS2 loop once.
     ps2_device_global_init();
 

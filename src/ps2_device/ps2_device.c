@@ -13,7 +13,7 @@
 #define RESP_CAP 32
 #define REQ_CAP  32
 
-// Per-port state. port 0 = pio0/GP5-9, port 1 = pio1/GP10-14.
+// Per-port state. port 0 = pio0/GP6-10, port 1 = pio1/GP11-15.
 static ps2_transport_t  s_transport[PS2_NUM_PORTS];
 static ds2_state_t      s_ds2[PS2_NUM_PORTS];
 static volatile bool    s_active[PS2_NUM_PORTS];
@@ -107,8 +107,8 @@ static void ps2_device_thread(void) {
 
 void ps2_device_global_init(void) {
     ps2_transport_global_init();
-    ps2_transport_init(&s_transport[0], pio0, 5);
-    ps2_transport_init(&s_transport[1], pio1, 10);
+    ps2_transport_init(&s_transport[0], pio0, 6);   // DAT=GP6 CMD=7 SEL=8 CLK=9 ACK=10
+    ps2_transport_init(&s_transport[1], pio1, 11);  // DAT=GP11 CMD=12 SEL=13 CLK=14 ACK=15
     for (unsigned p = 0; p < PS2_NUM_PORTS; p++) {
         ps2_transport_set_sel_hook(&s_transport[p], s_restart_hook[p]);
         s_active[p] = false;

@@ -8,14 +8,17 @@ console) to the Pico as below.
 
 | Signal | PS2 pin* | Pico GPIO | Direction (Pico) | Notes |
 |--------|----------|-----------|------------------|-------|
-| DAT    | 1        | **GP5**   | out (open-drain) | data to console; driven low or Hi-Z, **never high** |
-| CMD    | 2        | **GP6**   | in               | command from console |
+| DAT    | 1        | **GP6**   | out (open-drain) | data to console; driven low or Hi-Z, **never high** |
+| CMD    | 2        | **GP7**   | in               | command from console |
 | 7.6V   | 3        | —         | —                | **do not connect** (controller rumble rail) |
 | GND    | 4        | GND       | —                | common ground — required |
 | VCC 3.3V | 5      | —         | —                | console supplies 3.3V; power the Pico via USB instead for dev |
-| ATT/SEL| 6        | **GP7**   | in               | slave select (active low); rising edge = end of transaction |
-| CLK    | 7        | **GP8**   | in               | 250 kHz–500 kHz clock from console |
-| ACK    | 9        | **GP9**   | out (open-drain) | acknowledge pulse; low ~2 µs after each byte, **omitted after last** |
+| ATT/SEL| 6        | **GP8**   | in               | slave select (active low); rising edge = end of transaction |
+| CLK    | 7        | **GP9**   | in               | 250 kHz–500 kHz clock from console |
+| ACK    | 9        | **GP10**  | out (open-drain) | acknowledge pulse; low ~2 µs after each byte, **omitted after last** |
+
+> GP4 (SDA) and GP5 (SCL) are reserved for the status-LED matrix on the board's
+> STEMMA QT connector (`i2c0`); PS2 port 0 therefore starts at GP6.
 
 \* PS2 controller connector pin numbers, per
 [psx-spx](https://psx-spx.consoledev.net/controllersandmemorycards/). Pin 8 is
@@ -48,11 +51,11 @@ port's DAT/CMD/SEL/CLK/ACK to be consecutive):
 
 | Signal | PS2 pin | Pico GPIO |
 |--------|---------|-----------|
-| DAT | 1 | GP10 |
-| CMD | 2 | GP11 |
-| ATT/SEL | 6 | GP12 |
-| CLK | 7 | GP13 |
-| ACK | 9 | GP14 |
+| DAT | 1 | GP11 |
+| CMD | 2 | GP12 |
+| ATT/SEL | 6 | GP13 |
+| CLK | 7 | GP14 |
+| ACK | 9 | GP15 |
 
 Wire a second console controller port the same way as port 0. Both ports share
 GND with the console. core1 owns both `pio0` (port 0) and `pio1` (port 1).
