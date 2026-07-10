@@ -31,6 +31,7 @@ add_executable(ps2_controller
     src/ps2_device/ps2_device.c
     src/status_led/status_indicator.c
     src/matrix/matrix_driver.c
+    src/matrix/matrix_render.c
 )
 
 # Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.

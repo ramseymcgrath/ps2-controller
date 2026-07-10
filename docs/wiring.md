@@ -59,3 +59,10 @@ port's DAT/CMD/SEL/CLK/ACK to be consecutive):
 
 Wire a second console controller port the same way as port 0. Both ports share
 GND with the console. core1 owns both `pio0` (port 0) and `pio1` (port 1).
+
+## Status LED — 8×8 bicolor matrix (I2C)
+
+An Adafruit 8×8 bicolor LED matrix (HT16K33 backpack, addr `0x70`) plugs into the
+board's Qwiic/STEMMA QT connector — `i2c0`, **SDA = GP4, SCL = GP5**, 3V3, GND.
+Solder-free with a JST-SH cable. The STEMMA breakout carries its own SDA/SCL
+pull-ups; if wiring bare, add ~2.2–4.7 kΩ pull-ups for 400 kHz.
