@@ -40,3 +40,19 @@ share **GND** with the console. Do **not** wire the console's 3.3V (pin 5) or
 `psxSPI.pio` runs the state machines at 2.5 MHz (`SLOW_CLKDIV 50`) so the SM
 ignores clock activity not meant for the controller port. Do not change this
 without re-verifying on real hardware.
+
+## Port 1 (second controller)
+
+Same signals as port 0, shifted by 5 GPIOs (the relative-pin PIO requires each
+port's DAT/CMD/SEL/CLK/ACK to be consecutive):
+
+| Signal | PS2 pin | Pico GPIO |
+|--------|---------|-----------|
+| DAT | 1 | GP10 |
+| CMD | 2 | GP11 |
+| ATT/SEL | 6 | GP12 |
+| CLK | 7 | GP13 |
+| ACK | 9 | GP14 |
+
+Wire a second console controller port the same way as port 0. Both ports share
+GND with the console. core1 owns both `pio0` (port 0) and `pio1` (port 1).

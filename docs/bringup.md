@@ -98,3 +98,15 @@ erratic, adjust the `dat_writer`/`cmd_reader` clock edge (`wait 1` vs `wait 0` o
 ⬜ **BLE controllers:** we build BluePad32's BLE HID path (bundled btstack). If a
 BLE-only controller fails to connect, verify against a Classic controller first
 to isolate BLE from the rest of the stack.
+
+## Two controllers (dual port)
+
+- [ ] Port 0 alone: connect one pad, verify it works on console port 1 (as before).
+- [ ] Port 1 alone: connect one pad, verify it works on console port 2 (GP10–14).
+- [ ] Both: connect two pads; verify player 1 and player 2 are independent and
+      neither drops input while the other is active (the console polls ports
+      sequentially — watch for missed ACK / dropped frames on a logic analyzer).
+- [ ] Connection order: first pad → port 0, second → port 1; disconnect port 0's
+      pad and reconnect — the freed port is reused.
+- [ ] Confirm the relative-pin PIO drives both ports correctly (this is the
+      highest-risk change; scope CLK/DAT/ACK timing on both ports).
