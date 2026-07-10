@@ -30,6 +30,7 @@ add_executable(ps2_controller
     src/ps2_device/ds2_protocol.c
     src/ps2_device/ps2_device.c
     src/status_led/status_indicator.c
+    src/matrix/matrix_driver.c
 )
 
 # Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.
@@ -40,6 +41,8 @@ target_include_directories(ps2_controller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2_device
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/status_led
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/matrix
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include
 )
 
@@ -57,6 +60,10 @@ target_link_libraries(ps2_controller PUBLIC
     pico_btstack_cyw43
     pico_multicore
     hardware_pio
+    hardware_timer
+    hardware_clocks
+    hardware_i2c
+    hardware_dma
     bluepad32
 )
 
