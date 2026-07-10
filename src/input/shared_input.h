@@ -2,22 +2,18 @@
 #define SHARED_INPUT_H
 #include <stdbool.h>
 #include "input_state.h"
+#include "port_router.h"   // PS2_NUM_PORTS
 
-// Cross-core publish/snapshot of the mapped controller state.
-//
-// Single writer (core0, the BluePad32/BT thread) publishes the latest
-// PSXInputState; the reader (core1, the PS2 poll-response loop) takes a
-// tear-free snapshot. Implemented as a seqlock with DMB barriers rather than
-// a bare `volatile` struct: an 8-byte struct is not written atomically, so a
-// poll landing mid-update could otherwise serve a half-old/half-new frame.
-//
-// firmware-only (uses the RP2350 hardware sync barrier); not host-tested.
+// Per-port cross-core publish/snapshot (seqlock). Single writer per slot
+// (core0, the BluePad32 thread) publishes the latest PSXInputState for a port;
+// the reader (core1, the PS2 poll-response loop) takes a tear-free snapshot.
+// `port` must be < PS2_NUM_PORTS. firmware-only (RP2350 sync barrier).
 
-void          shared_input_init(void);                    // -> neutral, disconnected
-void          shared_input_publish(const PSXInputState *s);  // core0 writer
-PSXInputState shared_input_snapshot(void);                // core1 reader (consistent)
+void          shared_input_init(void);                              // all slots -> neutral, disconnected
+void          shared_input_publish(unsigned port, const PSXInputState *s);  // core0 writer
+PSXInputState shared_input_snapshot(unsigned port);                 // core1 reader (consistent)
 
-void shared_input_set_connected(bool connected);
-bool shared_input_connected(void);
+void shared_input_set_connected(unsigned port, bool connected);
+bool shared_input_connected(unsigned port);
 
 #endif // SHARED_INPUT_H

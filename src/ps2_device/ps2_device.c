@@ -2,6 +2,8 @@
 
 #include "pico/multicore.h"
 #include "pico/stdlib.h"     // tight_loop_contents()
+#include "hardware/pio.h"
+#include "hardware/sync.h"   // __dmb()
 
 #include "ds2_protocol.h"
 #include "ps2_transport.h"
@@ -11,116 +13,124 @@
 #define RESP_CAP 32
 #define REQ_CAP  32
 
-static ds2_state_t s_state;
+// Per-port state. port 0 = pio0/GP6-10, port 1 = pio1/GP11-15.
+static ps2_transport_t  s_transport[PS2_NUM_PORTS];
+static ds2_state_t      s_ds2[PS2_NUM_PORTS];
+static volatile bool    s_active[PS2_NUM_PORTS];
+static volatile bool    s_restart[PS2_NUM_PORTS];   // set by SEL ISR (core0)
 
-// Set by the SEL-rising ISR (core0) when the console deselects (transaction
-// end); polled by the core1 loop. This is the ONLY thing the ISR does — it
-// touches no PIO state — so core1 is the sole owner of the PIO FIFOs and there
-// is no cross-core FIFO race. It replaces per-transaction multicore_reset/launch
-// (which busy-wait unbounded in the SDK and can hang core0/Bluetooth if the ISR
-// re-enters an in-flight FIFO handshake). core1 is launched once per connection.
-static volatile bool s_restart;
+static void ps2_signal_restart_p0(void) { s_restart[0] = true; }
+static void ps2_signal_restart_p1(void) { s_restart[1] = true; }
+static void (*const s_restart_hook[PS2_NUM_PORTS])(void) = {
+    ps2_signal_restart_p0, ps2_signal_restart_p1,
+};
 
-static void ps2_signal_restart(void) {
-    s_restart = true;
-}
-
-// Wait for one CMD byte, bailing out if the transaction ended (restart). Returns
-// false when aborted. Non-blocking poll so a mid-transaction wait can never hang
-// past the current transaction.
-static bool recv_cmd(uint8_t *out) {
-    while (!s_restart) {
-        if (ps2_try_recv_cmd(out))
+// Wait for one CMD byte on `port`, bailing if its transaction ended (SEL rise)
+// OR the port was stopped (s_active cleared by ps2_device_stop). Checking
+// s_active is essential: stop() disarms the SEL IRQ, so once it fires nothing
+// can ever set s_restart again — without this guard a stop racing an in-flight
+// transaction would spin core1 forever and starve both ports. Runs on core1.
+static bool recv_cmd(unsigned port, uint8_t *out) {
+    while (!s_restart[port] && s_active[port]) {
+        if (ps2_try_recv_cmd(&s_transport[port], out))
             return true;
         tight_loop_contents();
     }
     return false;
 }
 
-// Send one DAT byte, bailing out if the transaction ended. false => aborted.
-static bool send_dat(uint8_t byte) {
-    while (!s_restart) {
-        if (ps2_try_send(byte))
+static bool send_dat(unsigned port, uint8_t byte) {
+    while (!s_restart[port] && s_active[port]) {
+        if (ps2_try_send(&s_transport[port], byte))
             return true;
         tight_loop_contents();
     }
     return false;
 }
 
-// Handle one console transaction. Returns having either completed a full frame
-// (state applied) or bailed at the first sign the transaction is not ours / was
-// cut short. Reaching ds2_apply_request() means every byte was exchanged on the
-// wire, so the transaction genuinely completed.
-static void process_one_transaction(void) {
-    uint8_t resp[RESP_CAP];
-    uint8_t req[REQ_CAP];
+// Continue a transaction on `port` after its address byte was already read.
+static void process_transaction(unsigned port, uint8_t addr) {
+    if (addr != PS2_ADDR_CONTROLLER)
+        return;                                  // 0x81 memcard: stay Hi-Z
 
-    uint8_t addr;
-    if (!recv_cmd(&addr) || addr != PS2_ADDR_CONTROLLER)
-        return;
-
-    // The ID byte goes out on DAT during the same exchange that shifts the
-    // command byte in, so it is queued before we know the command.
-    if (!send_dat(ds2_id_byte(&s_state)))
+    ds2_state_t *st = &s_ds2[port];
+    if (!send_dat(port, ds2_id_byte(st)))
         return;
     uint8_t cmd;
-    if (!recv_cmd(&cmd))
+    if (!recv_cmd(port, &cmd))
         return;
 
-    PSXInputState in = shared_input_snapshot();  // tear-free snapshot from core0
-
-    // resp[0] is the ID already sent; resp[1..] is 0x5A + payload. req is unknown
-    // at build time, so offset-dependent descriptor commands (0x46/0x4C) serve
-    // their offset-0 form — a known limitation to reconcile on the bench.
-    size_t rn = ds2_response(&s_state, cmd, &in, NULL, 0, resp, sizeof resp);
+    PSXInputState in = shared_input_snapshot(port);
+    uint8_t resp[RESP_CAP], req[REQ_CAP];
+    size_t rn = ds2_response(st, cmd, &in, NULL, 0, resp, sizeof resp);
 
     size_t ri = 0;
     for (size_t i = 1; i < rn; i++) {
-        if (!send_dat(resp[i]))
-            return;                    // cut short: do not apply a partial frame
+        if (!send_dat(port, resp[i]))
+            return;
         uint8_t rx;
-        if (!recv_cmd(&rx))
+        if (!recv_cmd(port, &rx))
             return;
         if (ri < sizeof req)
             req[ri++] = rx;
     }
-
-    ds2_apply_request(&s_state, cmd, req, ri);
+    ds2_apply_request(st, cmd, req, ri);
 }
 
-void ps2_device_thread(void) {
-    // Re-arm cross-core lockout for this core. core1 runs continuously for the
-    // whole connection; ps2_device_start() initialised s_state once before
-    // launch, so config/mode persist across transactions.
+// Single core1 loop for all ports. The PS2 SIO selects ports sequentially, so
+// at most one port has an in-flight transaction; we poll both and service the
+// one whose address byte arrived, then re-sync that port after its SEL rise.
+static void ps2_device_thread(void) {
     multicore_lockout_victim_init();
 
     for (;;) {
-        s_restart = false;
-        process_one_transaction();
+        for (unsigned p = 0; p < PS2_NUM_PORTS; p++) {
+            if (!s_active[p])
+                continue;
 
-        // Wait for the console to finish the transaction (SEL rise sets
-        // s_restart via the ISR), then re-sync the PIO for the next one. Doing
-        // the restart here — on core1, during the inter-transaction gap — keeps
-        // core1 the sole PIO-FIFO owner and never restarts mid-transaction.
-        while (!s_restart)
-            tight_loop_contents();
-        ps2_restart_pio();
+            uint8_t addr;
+            if (!ps2_try_recv_cmd(&s_transport[p], &addr))
+                continue;                        // no transaction on this port now
+
+            s_restart[p] = false;
+            process_transaction(p, addr);
+
+            // Wait for the console to finish (SEL rise) or the port to go
+            // inactive, then re-sync this port's PIO on core1.
+            while (!s_restart[p] && s_active[p])
+                tight_loop_contents();
+            ps2_restart_pio(&s_transport[p]);
+            s_restart[p] = false;
+        }
     }
 }
 
-void ps2_device_start(void) {
-    ds2_init(&s_state);
-    s_restart = false;
-    ps2_transport_set_sel_hook(ps2_signal_restart);
-    ps2_transport_enable_sel(true);
-    multicore_launch_core1(ps2_device_thread);   // one-time launch for the connection
+void ps2_device_global_init(void) {
+    ps2_transport_global_init();
+    ps2_transport_init(&s_transport[0], pio0, 6);   // DAT=GP6 CMD=7 SEL=8 CLK=9 ACK=10
+    ps2_transport_init(&s_transport[1], pio1, 11);  // DAT=GP11 CMD=12 SEL=13 CLK=14 ACK=15
+    for (unsigned p = 0; p < PS2_NUM_PORTS; p++) {
+        ps2_transport_set_sel_hook(&s_transport[p], s_restart_hook[p]);
+        s_active[p] = false;
+        s_restart[p] = false;
+    }
+    multicore_launch_core1(ps2_device_thread);   // one-time; services all ports
 }
 
-void ps2_device_stop(void) {
-    ps2_transport_enable_sel(false);     // stop further SEL ISRs first
-    ps2_transport_set_sel_hook(NULL);
-    multicore_reset_core1();             // one-time teardown (not per-transaction)
-    // Present a centered, all-released pad rather than a dropout.
+void ps2_device_start(unsigned port) {
+    ds2_init(&s_ds2[port]);
+    s_restart[port] = false;
+    ps2_transport_enable_sel(&s_transport[port], true);
+    // Order the s_ds2/s_restart writes before core1 can observe s_active. core1
+    // is already running (launched once), so unlike the old per-connection
+    // multicore_launch there is no implicit launch barrier to rely on here.
+    __dmb();
+    s_active[port] = true;
+}
+
+void ps2_device_stop(unsigned port) {
+    s_active[port] = false;
+    ps2_transport_enable_sel(&s_transport[port], false);
     PSXInputState neutral = ds2_neutral_state();
-    shared_input_publish(&neutral);
+    shared_input_publish(port, &neutral);
 }

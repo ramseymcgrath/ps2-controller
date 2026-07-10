@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(PICO_BOARD pico2_w CACHE STRING "Board type")
+set(PICO_BOARD pimoroni_pico_plus2_w_rp2350 CACHE STRING "Board type")
 
 # BluePad32 + BTstack must be located before pico_sdk_init().
 # BluePad32 is vendored under external/. We use BluePad32's OWN bundled btstack
@@ -24,10 +24,14 @@ add_executable(ps2_controller
     src/main.c
     src/input/bluepad32_platform.c
     src/input/gamepad_map.c
+    src/input/port_router.c
     src/input/shared_input.c
     src/ps2_device/ps2_transport.c
     src/ps2_device/ds2_protocol.c
     src/ps2_device/ps2_device.c
+    src/status_led/status_indicator.c
+    src/matrix/matrix_driver.c
+    src/matrix/matrix_render.c
 )
 
 # Generate psxSPI.pio.h (PIO program + c-sdk helpers) for the transport.
@@ -38,6 +42,8 @@ target_include_directories(ps2_controller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ps2_device
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/status_led
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/matrix
     ${BLUEPAD32_ROOT}/src/components/bluepad32/include
 )
 
@@ -55,6 +61,10 @@ target_link_libraries(ps2_controller PUBLIC
     pico_btstack_cyw43
     pico_multicore
     hardware_pio
+    hardware_timer
+    hardware_clocks
+    hardware_i2c
+    hardware_dma
     bluepad32
 )
 

@@ -98,3 +98,37 @@ erratic, adjust the `dat_writer`/`cmd_reader` clock edge (`wait 1` vs `wait 0` o
 ⬜ **BLE controllers:** we build BluePad32's BLE HID path (bundled btstack). If a
 BLE-only controller fails to connect, verify against a Classic controller first
 to isolate BLE from the rest of the stack.
+
+## Status LED — 8×8 bicolor matrix (HT16K33 on i2c0)
+
+Plug the Adafruit 8×8 bicolor matrix into the STEMMA QT connector (GP4/GP5, addr
+`0x70`). Then verify:
+
+- [ ] Power-on before BT is up: panel blank (BOOT).
+- [ ] After BT init: a single green pixel orbits the perimeter (~1.8 s/rev) (SEARCHING).
+- [ ] Force a cyw43 init failure (e.g. no RM2 module): red "X" blinks ~1 Hz (ERROR).
+- [ ] Connect one controller: steady green "1"; connect a second: steady green "2".
+- [ ] Disconnect one of two: falls back to "1"; disconnect the last: back to the orbit.
+- [ ] **Column orientation (open-item #1):** confirm digits/X are upright and not
+      mirrored/shifted. If wrong, adjust `col_fixup()` in `matrix_render.c` and
+      the `test_col_fixup_pinned` assertion together.
+- [ ] **DMA STOP (open-item #2):** confirm frames land and consecutive updates
+      don't stall. If the first update works but the next hangs, the STOP bit
+      isn't landing — rebuild with `-DMATRIX_SHOW_BLOCKING` (add
+      `target_compile_definitions(ps2_controller PRIVATE MATRIX_SHOW_BLOCKING)`)
+      to use the blocking path, and file the DMA STOP issue.
+- [ ] **Connector pins (open-item #3):** confirm GP4/GP5 are the physical Qwiic
+      bus on your board revision.
+- [ ] Confirm the PS2 side still works (LED shares no resources with pio0/1/core1).
+
+## Two controllers (dual port)
+
+- [ ] Port 0 alone: connect one pad, verify it works on console port 1 (as before).
+- [ ] Port 1 alone: connect one pad, verify it works on console port 2 (GP11–15).
+- [ ] Both: connect two pads; verify player 1 and player 2 are independent and
+      neither drops input while the other is active (the console polls ports
+      sequentially — watch for missed ACK / dropped frames on a logic analyzer).
+- [ ] Connection order: first pad → port 0, second → port 1; disconnect port 0's
+      pad and reconnect — the freed port is reused.
+- [ ] Confirm the relative-pin PIO drives both ports correctly (this is the
+      highest-risk change; scope CLK/DAT/ACK timing on both ports).

@@ -13,7 +13,8 @@
 
 #include "sdkconfig.h"
 #include "bluepad32_platform.h"
-#include "ps2_transport.h"
+#include "ps2_device.h"
+#include "status_indicator.h"
 
 // Sanity check: the Pico W platform must be built as a custom platform.
 #ifndef CONFIG_BLUEPAD32_PLATFORM_CUSTOM
@@ -29,21 +30,32 @@ int main(void) {
     set_sys_clock_khz(SYS_CLOCK_KHZ, true);
     stdio_init_all();
 
+    // Bring the status LED up first (needs only the clock + i2c0). Its render
+    // timer runs on the SDK alarm pool, so it works even if BT init fails below.
+    status_indicator_init();
+
     // Enables Bluetooth too (CYW43_ENABLE_BLUETOOTH). Must precede uni_init().
     if (cyw43_arch_init()) {
         loge("failed to initialise cyw43_arch\n");
-        return -1;
+        status_indicator_set(STATUS_ERROR);
+        // Spin rather than return: the core0 alarm-pool timer keeps blinking the
+        // red error state. Assumes no watchdog is enabled (SDK default), else this
+        // would reset-loop.
+        while (true)
+            tight_loop_contents();
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    // Claim pio0 SMs after cyw43 has taken its own PIO resources.
-    ps2_transport_init();
+    // Init both port transports (pio0 GP6-10, pio1 GP11-15) after cyw43 has taken
+    // its own PIO resources, and launch the single core1 PS2 loop once.
+    ps2_device_global_init();
 
     uni_platform_set_custom(get_ps2_platform());
     uni_init(0, NULL);
 
-    // BluePad32 owns the run loop on core0; does not return. The core1 PS2 loop
-    // is launched from the platform's connect callback (ps2_device_start()).
+    // BluePad32 owns the run loop on core0; does not return. core1 was already
+    // launched by ps2_device_global_init(); the platform's connect/disconnect
+    // callbacks only flip each port's active flag (ps2_device_start/stop).
     btstack_run_loop_execute();
     return 0;
 }
