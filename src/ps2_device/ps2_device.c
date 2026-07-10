@@ -24,9 +24,13 @@ static void (*const s_restart_hook[PS2_NUM_PORTS])(void) = {
     ps2_signal_restart_p0, ps2_signal_restart_p1,
 };
 
-// Wait for one CMD byte on `port`, bailing if its transaction ended. core1.
+// Wait for one CMD byte on `port`, bailing if its transaction ended (SEL rise)
+// OR the port was stopped (s_active cleared by ps2_device_stop). Checking
+// s_active is essential: stop() disarms the SEL IRQ, so once it fires nothing
+// can ever set s_restart again — without this guard a stop racing an in-flight
+// transaction would spin core1 forever and starve both ports. core1.
 static bool recv_cmd(unsigned port, uint8_t *out) {
-    while (!s_restart[port]) {
+    while (!s_restart[port] && s_active[port]) {
         if (ps2_try_recv_cmd(&s_transport[port], out))
             return true;
         tight_loop_contents();
@@ -35,7 +39,7 @@ static bool recv_cmd(unsigned port, uint8_t *out) {
 }
 
 static bool send_dat(unsigned port, uint8_t byte) {
-    while (!s_restart[port]) {
+    while (!s_restart[port] && s_active[port]) {
         if (ps2_try_send(&s_transport[port], byte))
             return true;
         tight_loop_contents();
