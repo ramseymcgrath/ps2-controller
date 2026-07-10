@@ -36,14 +36,16 @@ int main(void) {
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
-    // Claim pio0 SMs after cyw43 has taken its own PIO resources.
+    // Init both port transports (pio0 GP5-9, pio1 GP10-14) after cyw43 has taken
+    // its own PIO resources, and launch the single core1 PS2 loop once.
     ps2_device_global_init();
 
     uni_platform_set_custom(get_ps2_platform());
     uni_init(0, NULL);
 
-    // BluePad32 owns the run loop on core0; does not return. The core1 PS2 loop
-    // is launched from the platform's connect callback (ps2_device_start()).
+    // BluePad32 owns the run loop on core0; does not return. core1 was already
+    // launched by ps2_device_global_init(); the platform's connect/disconnect
+    // callbacks only flip each port's active flag (ps2_device_start/stop).
     btstack_run_loop_execute();
     return 0;
 }

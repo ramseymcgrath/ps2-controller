@@ -42,10 +42,10 @@ Two **port instances**, index 0 and 1. Each owns:
 | `ds2_state` | instance 0 | instance 1 |
 | `shared_input` slot | slot 0 | slot 1 |
 
-- **core1** runs a single loop that services **both** ports (round-robin): the
-  PIO SMs do all bit-level timing; core1 feeds/drains each port's FIFOs and does
-  per-port transaction restart. core1 is the sole owner of `pio0` **and**
-  `pio1`.
+- **core1** runs a single loop that services **both** ports, one transaction at
+  a time (see the hard sequential-selection constraint below): the PIO SMs do all
+  bit-level timing; core1 feeds/drains each port's FIFOs and does per-port
+  transaction restart. core1 is the sole owner of `pio0` **and** `pio1`.
 - **core0 / BluePad32** is unchanged in role: receives controllers, maps input,
   and now publishes to the *correct port's* `shared_input` slot based on the
   device→port assignment.
@@ -93,12 +93,17 @@ iteration, for each active port `p`:
 2. Between transactions, if port `p`'s restart flag is set (its SEL rose = end of
    frame), run `ps2_restart_pio(&transport[p])` and clear the flag.
 
-Both ports are independent buses; the console typically polls them sequentially
-but may overlap. Round-robin servicing is fast enough (a byte is ~16–32 µs at
-250–500 kHz; core1 at 125 MHz has ample cycles), and each port's bit timing is
-autonomous in its own SMs. Per-port restart is the only cross-core-sensitive
-work and remains core1-only (the SEL ISR merely sets a per-port `volatile` flag,
-exactly as today).
+**Sequential selection is a hard constraint, not a convenience.** A PS2 has a
+single SIO controller that selects one device at a time via the attention (SEL)
+lines, so it physically cannot clock both ports simultaneously — at most one port
+has an in-flight transaction. The loop relies on this: once it reads a port's
+address byte it services that transaction to completion (blocking on that port's
+FIFOs) before looking at the other port. This is correct for the target topology
+(**one console, two ports**). Concurrent clocking of both ports — e.g. two
+independent consoles — is **unsupported by construction** and would starve the
+second port; it is out of scope. Each port's bit timing is autonomous in its own
+SMs; per-port restart is the only cross-core-sensitive work and remains
+core1-only (the SEL ISR merely sets a per-port `volatile` flag).
 
 ### SEL ISR
 
@@ -143,7 +148,8 @@ program memory, but leaves port 0's instructions byte-identical).
 - **`on_controller_data(d, ctl)`**: find `d`'s port; map and
   `shared_input_publish(port, &st)`.
 - A third+ controller that connects while both ports are taken is left
-  unassigned (ignored) until a slot frees. Logged.
+  unassigned (ignored and logged). It is picked up only when it reconnects after
+  a slot has freed — a still-connected extra pad is not re-assigned mid-session.
 
 The assignment helper (find-lowest-free-port / lookup-port-for-device over the
 2-entry table) is a **pure function**, extracted so it is host-testable.
@@ -186,9 +192,10 @@ Common GND shared with the console (and with port 0). Do not wire the console's
 
 ## Risks
 
-- **Concurrent polling of both ports** — mitigated by autonomous per-port PIO
-  timing + fast core1 round-robin; must be confirmed on the bench with two live
-  ports.
+- **Concurrent clocking of both ports** — the design assumes the PS2 SIO never
+  clocks both ports at once (sequential selection). This is guaranteed for a
+  single console but must be confirmed on the bench with two live ports (watch
+  for a missed frame on one port while the other is mid-transaction).
 - **Relative-pin PIO rewrite** — timing-critical; bench-validate both ports.
   Fallback = second absolute-pin image.
 - **core1 servicing latency** — with two ports the loop does ~2× work; verify no

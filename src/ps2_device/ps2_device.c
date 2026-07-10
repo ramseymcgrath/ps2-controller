@@ -3,6 +3,7 @@
 #include "pico/multicore.h"
 #include "pico/stdlib.h"     // tight_loop_contents()
 #include "hardware/pio.h"
+#include "hardware/sync.h"   // __dmb()
 
 #include "ds2_protocol.h"
 #include "ps2_transport.h"
@@ -28,7 +29,7 @@ static void (*const s_restart_hook[PS2_NUM_PORTS])(void) = {
 // OR the port was stopped (s_active cleared by ps2_device_stop). Checking
 // s_active is essential: stop() disarms the SEL IRQ, so once it fires nothing
 // can ever set s_restart again — without this guard a stop racing an in-flight
-// transaction would spin core1 forever and starve both ports. core1.
+// transaction would spin core1 forever and starve both ports. Runs on core1.
 static bool recv_cmd(unsigned port, uint8_t *out) {
     while (!s_restart[port] && s_active[port]) {
         if (ps2_try_recv_cmd(&s_transport[port], out))
@@ -120,6 +121,10 @@ void ps2_device_start(unsigned port) {
     ds2_init(&s_ds2[port]);
     s_restart[port] = false;
     ps2_transport_enable_sel(&s_transport[port], true);
+    // Order the s_ds2/s_restart writes before core1 can observe s_active. core1
+    // is already running (launched once), so unlike the old per-connection
+    // multicore_launch there is no implicit launch barrier to rely on here.
+    __dmb();
     s_active[port] = true;
 }
 
