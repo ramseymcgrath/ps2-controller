@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-set(PICO_BOARD pico2_w CACHE STRING "Board type")
+set(PICO_BOARD pimoroni_pico_plus2_w_rp2350 CACHE STRING "Board type")
 
 # BluePad32 + BTstack must be located before pico_sdk_init().
 # BluePad32 is vendored under external/. We use BluePad32's OWN bundled btstack
